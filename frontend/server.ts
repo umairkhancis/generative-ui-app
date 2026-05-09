@@ -1,14 +1,14 @@
-import { CopilotRuntime, createCopilotEndpoint } from "@copilotkit/runtime/v2";
+import { CopilotRuntime, createCopilotHonoHandler } from "@copilotkit/runtime/v2";
 import { HttpAgent } from "@ag-ui/client";
 import { LangGraphHttpAgent } from "@copilotkit/runtime/langgraph";
 import { serve } from "@hono/node-server";
 
 const langGraphAgent = new LangGraphHttpAgent({
-    url: process.env.LANGGRAPH_DEPLOYMENT_URL || "http://localhost:8002",
+    url: process.env.LANGGRAPH_DEPLOYMENT_URL || "http://localhost:8000",
 });
 
 const adkAgent = new HttpAgent({
-    url: process.env.ADK_AGENT_URL || "http://localhost:8009",
+    url: process.env.ADK_AGENT_URL || "http://localhost:8009/api/adk",
 });
 
 const runtime = new CopilotRuntime({
@@ -18,7 +18,7 @@ const runtime = new CopilotRuntime({
     },
 });
 
-const app = createCopilotEndpoint({
+const app = createCopilotHonoHandler({
     runtime,
     basePath: "/api/copilotkit",
 });
