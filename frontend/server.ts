@@ -8,7 +8,7 @@ const langGraphAgent = new LangGraphHttpAgent({
 });
 
 const adkAgent = new HttpAgent({
-    url: process.env.ADK_AGENT_URL || "http://localhost:8009/api/adk",
+    url: process.env.ADK_AGENT_URL || "http://localhost:8009",
 });
 
 const runtime = new CopilotRuntime({
