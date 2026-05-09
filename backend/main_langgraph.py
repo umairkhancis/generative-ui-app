@@ -1,3 +1,7 @@
+import warnings
+
+warnings.filterwarnings("ignore", message=".*allowed_objects.*")
+
 import uvicorn
 from ag_ui_langgraph import add_langgraph_fastapi_endpoint
 from copilotkit import CopilotKitMiddleware, LangGraphAGUIAgent
