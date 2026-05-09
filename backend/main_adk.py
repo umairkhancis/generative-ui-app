@@ -1,3 +1,4 @@
+import os
 import uvicorn
 from ag_ui_adk import ADKAgent
 from ag_ui_adk.endpoint import add_adk_fastapi_endpoint
@@ -7,9 +8,21 @@ from google.adk.agents import LlmAgent
 
 load_dotenv()
 
+LITELLM_BASE_URL = os.getenv("LITELLM_BASE_URL")
+
+if LITELLM_BASE_URL:
+    from google.adk.models.lite_llm import LiteLlm
+    model = LiteLlm(
+        model="openai/gpt-4.1",
+        api_base=LITELLM_BASE_URL,
+        api_key=os.getenv("OPENAI_API_KEY"),
+    )
+else:
+    model = "gemini-2.0-flash"  # uses GOOGLE_API_KEY directly
+
 agent = LlmAgent(
     name="gemini",
-    model="gemini-2.0-flash",
+    model=model,
     description="A helpful assistant",
     instruction="You are a helpful assistant.",
 )
