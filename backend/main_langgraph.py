@@ -2,6 +2,7 @@ import warnings
 
 warnings.filterwarnings("ignore", message=".*allowed_objects.*")
 
+import os
 import uvicorn
 from ag_ui_langgraph import add_langgraph_fastapi_endpoint
 from copilotkit import CopilotKitMiddleware, LangGraphAGUIAgent
@@ -16,7 +17,7 @@ load_dotenv()
 HOST = "0.0.0.0"
 PORT = 8000
 MODEL = "gpt-4.1"
-LITELLM_BASE_URL = "https://litellm.dhhmena.com"
+LITELLM_BASE_URL = os.getenv("LITELLM_BASE_URL")  # optional — omit to use OpenAI directly
 
 SYSTEM_PROMPT = (
     "You are a helpful assistant for a demo app with a few available UI tools. "
@@ -28,7 +29,7 @@ SYSTEM_PROMPT = (
 )
 
 graph = create_agent(
-    model=ChatOpenAI(model=MODEL, base_url=LITELLM_BASE_URL),
+    model=ChatOpenAI(model=MODEL, **({"base_url": LITELLM_BASE_URL} if LITELLM_BASE_URL else {})),
     tools=[],
     middleware=[CopilotKitMiddleware()],
     checkpointer=MemorySaver(),
