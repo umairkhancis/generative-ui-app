@@ -16,6 +16,7 @@ load_dotenv()
 HOST = "0.0.0.0"
 PORT = 8000
 MODEL = "gpt-4.1"
+LITELLM_BASE_URL = "https://litellm.dhhmena.com"
 
 SYSTEM_PROMPT = (
     "You are a helpful assistant for a demo app with a few available UI tools. "
@@ -27,7 +28,7 @@ SYSTEM_PROMPT = (
 )
 
 graph = create_agent(
-    model=ChatOpenAI(model=MODEL),
+    model=ChatOpenAI(model=MODEL, base_url=LITELLM_BASE_URL),
     tools=[],
     middleware=[CopilotKitMiddleware()],
     checkpointer=MemorySaver(),
