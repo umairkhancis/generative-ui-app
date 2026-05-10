@@ -2,13 +2,18 @@ import warnings
 
 warnings.filterwarnings("ignore", message=".*allowed_objects.*")
 
+import csv
 import os
+from pathlib import Path
+from typing import Any
+
 import uvicorn
 from ag_ui_langgraph import add_langgraph_fastapi_endpoint
 from copilotkit import CopilotKitMiddleware, LangGraphAGUIAgent
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from langchain.agents import create_agent
+from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
 
@@ -28,9 +33,18 @@ SYSTEM_PROMPT = (
     "Tool arguments must match the provided schema exactly."
 )
 
+CSV_PATH = Path(__file__).resolve().parent / "db.csv"
+
+@tool
+def query_data(query: str) -> list[dict[str, Any]]:
+    """Query the lesson dataset. Always call before showing a chart or graph."""
+    with CSV_PATH.open(newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        return list(reader)
+
 graph = create_agent(
     model=ChatOpenAI(model=MODEL, **({"base_url": LITELLM_BASE_URL} if LITELLM_BASE_URL else {})),
-    tools=[],
+    tools=[query_data],
     middleware=[CopilotKitMiddleware()],
     checkpointer=MemorySaver(),
     system_prompt=SYSTEM_PROMPT,
