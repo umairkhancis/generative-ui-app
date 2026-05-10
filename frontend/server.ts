@@ -16,6 +16,15 @@ const runtime = new CopilotRuntime({
         default: langGraphAgent,
         gemini: adkAgent,
     },
+    mcpApps: {
+        servers: [
+            {
+                type: "http",
+                url: "https://mcp.excalidraw.com",
+                serverId: "example_mcp_server", // com.excalidraw.mcp
+            },
+        ],
+    },
 });
 
 const app = createCopilotHonoHandler({
