@@ -1,29 +1,10 @@
 import { test, expect } from "@playwright/test";
+import { openChat, sendMessage, waitForAssistantTurn } from "./helpers";
 
-test("sends hello and gets a response from the agent", async ({ page }) => {
-  await page.goto("http://localhost:5173");
-
-  // Wait for the chat textarea to be ready
-  const input = page.getByTestId("copilot-chat-textarea");
-  await input.waitFor({ state: "visible", timeout: 10_000 });
-
-  // Type and send "hello"
-  await input.fill("hello");
-  await input.press("Enter");
-
-  // User message should appear immediately
-  await expect(page.getByTestId("copilot-user-message").first()).toBeVisible();
-
-  // Loading cursor appears while agent is thinking — wait for it to disappear
-  const loadingCursor = page.getByTestId("copilot-loading-cursor");
-  await loadingCursor.waitFor({ state: "visible", timeout: 10_000 });
-  await loadingCursor.waitFor({ state: "hidden", timeout: 30_000 });
-
-  // Assert an assistant message is now visible
-  const assistantMessage = page.getByTestId("copilot-assistant-message").first();
-  await expect(assistantMessage).toBeVisible({ timeout: 5_000 });
-
-  const text = await assistantMessage.innerText();
-  console.log(`Agent responded: "${text}"`);
-  expect(text.trim().length).toBeGreaterThan(0);
+test("default (LangGraph) agent: hello → response", async ({ page }) => {
+  await openChat(page, "default");
+  await sendMessage(page, "hello");
+  const assistant = await waitForAssistantTurn(page);
+  const text = (await assistant.innerText()).trim();
+  expect(text.length).toBeGreaterThan(0);
 });

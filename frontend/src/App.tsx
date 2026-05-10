@@ -7,6 +7,9 @@ import { PieChart, PieChartProps } from "@/components/pie-chart";
 
 import { useExampleSuggestions } from "@/hooks/use-example-suggestions";
 
+const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+const agentId = (params.get("agent") as string) || "default";
+
 export default function App() {
 
   // 🪁 Register a component that shows the name of the user
@@ -36,5 +39,5 @@ export default function App() {
   // 🪁 Add suggestions to our CopilotChat, will display through buttons
   useExampleSuggestions();
 
-  return <CopilotChat />;
+  return <CopilotChat agentId={agentId} />;
 };
