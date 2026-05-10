@@ -1,23 +1,32 @@
-# python package requirements file
+# Python 3.12 required. Install with:
+#   python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt
 
-# Note to our Learners: Our courses are created at a specific point in time. The models and libraries used will naturally change over time.
-# If you download and run the notebooks locally, you should create a Python virtual environment
-# with the Python version matching the one used in the course and use this requirements.txt file to install the required Python packages.
-# Due to the wide diversity of platforms and environments, DeepLearning does not explicitly support running locally. However, if you encounter
-# issues, the course support channel is a good place to ask questions.
-
-
-# Python 3.11+ recommended. Install with: pip install -r requirements.txt
-
+# CopilotKit
 copilotkit==0.1.86
-fastapi
-uvicorn
-langchain-openai
-langgraph>=1.0.8,<1.1.0
-langgraph-prebuilt<1.0.9
-python-dotenv
-ag-ui-adk
-google-adk
-jupyter
-honcho
 
+# AG-UI
+ag-ui-langgraph==0.0.35
+ag-ui-adk==0.6.1
+
+# LangGraph — pinned tightly to avoid breaking ag-ui-langgraph
+langgraph==1.0.10
+langgraph-prebuilt==1.0.8
+langgraph-checkpoint==4.0.3
+
+# LangChain
+langchain==1.2.10
+langchain-core==1.3.3
+langchain-openai==1.2.1
+
+# Google ADK — install with [extensions] for LiteLLM support
+google-adk[extensions]==1.33.0
+litellm==1.83.14
+
+# Web framework
+fastapi==0.136.1
+uvicorn==0.46.0
+
+# Utilities
+python-dotenv==1.2.2
+jupyter==1.1.1
+honcho==2.0.0
