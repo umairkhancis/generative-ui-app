@@ -23,6 +23,11 @@ const runtime = new CopilotRuntime({
                 url: "https://mcp.excalidraw.com",
                 serverId: "example_mcp_server", // com.excalidraw.mcp
             },
+            {
+                type: "http",
+                url: "https://certainly-occur-permit-joyce.trycloudflare.com/mcp",
+                serverId: "elli_example_mcp_server",
+            },
         ],
     },
 });
