@@ -1,26 +1,35 @@
 from __future__ import annotations
 
-from langgraph.checkpoint.memory import MemorySaver
-from langchain_openai import ChatOpenAI
-from langchain_core.tools import tool
-from langchain_core.messages import ToolMessage
-from langchain.agents import create_agent
-from fastapi import FastAPI
-from dotenv import load_dotenv
-from copilotkit import CopilotKitMiddleware, LangGraphAGUIAgent, a2ui
-from ag_ui_langgraph import add_langgraph_fastapi_endpoint
-from copilotkit.langgraph import CopilotKitState
-from langgraph.types import Command
-import uvicorn
-from typing import Any, TypedDict
-from pathlib import Path
-import os
+# Suppress LangChain/LangGraph deprecation warnings from third-party internals
+# Must come before any langgraph/langchain imports to take effect.
+import warnings
+warnings.filterwarnings("ignore", message=".*allowed_objects.*")
+
+# ── Standard library ──────────────────────────────────────────────────────────
 import csv
 import json
+import os
 import uuid
-import warnings
+from pathlib import Path
+from typing import Any, TypedDict
 
-warnings.filterwarnings("ignore", message=".*allowed_objects.*")
+# ── LangChain / LangGraph ─────────────────────────────────────────────────────
+from langchain.agents import AgentState as BaseAgentState, create_agent
+from langchain.tools import ToolRuntime
+from langchain_core.messages import ToolMessage
+from langchain_core.tools import tool
+from langchain_openai import ChatOpenAI
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.types import Command
+
+# ── CopilotKit ────────────────────────────────────────────────────────────────
+from copilotkit import CopilotKitMiddleware, LangGraphAGUIAgent, a2ui
+from ag_ui_langgraph import add_langgraph_fastapi_endpoint
+
+# ── Web framework ─────────────────────────────────────────────────────────────
+from fastapi import FastAPI
+from dotenv import load_dotenv
+import uvicorn
 
 load_dotenv()
 
@@ -63,6 +72,7 @@ class AgentState(BaseAgentState):
     todos: list[Todo]
 
 # ── Tools ─────────────────────────────────────────────────────────────────────
+
 
 @tool
 def query_data(query: str) -> list[dict[str, Any]]:

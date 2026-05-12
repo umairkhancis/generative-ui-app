@@ -1,6 +1,4 @@
 import { CopilotChat } from "@copilotkit/react-core/v2";
-
-
 import { TodoAppLayout } from "@/components/todo-app-layout";
 import { TodoList } from "@/components/todo-list";
 import { useExampleFixedSuggestions, useExampleSuggestions, useTodoSuggestions } from "@/hooks/use-example-suggestions";
@@ -12,15 +10,17 @@ import { useControlledComponents } from "./hooks/use-controlled-components";
 const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
 const agentId = (params.get("agent") as string) || "default";
 
-export default function App() {
-
+// Suggestions must be called inside the CopilotChat context, not outside it.
+function ChatWithSuggestions() {
   useControlledComponents();
-
   useExampleSuggestions();
   useExampleFixedSuggestions();
   useTodoSuggestions();
   // useExampleDynamicSuggestions(); // Dynamic Schema: NOT WORKING
+  return <CopilotChat agentId={agentId} />;
+}
 
+export default function App() {
   const [todosOpen, setTodosOpen] = useState(false);
 
   // 🪁 Register a frontend tool the agent can call to control the UI
@@ -39,7 +39,7 @@ export default function App() {
 
   return (
     <TodoAppLayout
-      chat={<CopilotChat agentId={agentId} />}
+      chat={<ChatWithSuggestions />}
       open={todosOpen}
       onOpenChange={setTodosOpen}
       panel={(onClose) => (

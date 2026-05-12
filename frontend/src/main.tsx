@@ -5,7 +5,7 @@ import { createRoot } from "react-dom/client";
 import { demonstrationCatalog } from "./catalog/demo";
 import "./global.css";
 import { ErrorBoundary } from "./error-boundary";
-import App from "./App2";
+import App from "./App";
 
 createRoot(document.getElementById("root")!).render(
     <StrictMode>
