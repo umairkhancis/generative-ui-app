@@ -1,21 +1,26 @@
+from __future__ import annotations
+
 from langgraph.checkpoint.memory import MemorySaver
 from langchain_openai import ChatOpenAI
 from langchain_core.tools import tool
+from langchain_core.messages import ToolMessage
 from langchain.agents import create_agent
 from fastapi import FastAPI
 from dotenv import load_dotenv
 from copilotkit import CopilotKitMiddleware, LangGraphAGUIAgent, a2ui
 from ag_ui_langgraph import add_langgraph_fastapi_endpoint
+from copilotkit.langgraph import CopilotKitState
+from langgraph.types import Command
 import uvicorn
 from typing import Any, TypedDict
 from pathlib import Path
 import os
 import csv
 import json
+import uuid
 import warnings
 
 warnings.filterwarnings("ignore", message=".*allowed_objects.*")
-
 
 load_dotenv()
 
@@ -26,25 +31,38 @@ MODEL = "gpt-4.1"
 LITELLM_BASE_URL = os.getenv("LITELLM_BASE_URL")
 
 SYSTEM_PROMPT = (
-        "You are a helpful assistant that creates rich visual UI.\n\n"
-        "Tool guidance:\n"
-        "- ALL flight-related queries: first call search_flights to fetch flight "
-        "data, then call display_flights with the results. NEVER use generate_a2ui "
-        "for flights.\n"
-        "- For sales/business data requests: first call get_sales_data to fetch "
-        "the latest metrics, then call generate_a2ui to visualize the results.\n"
-        "- For other rich UI: call generate_a2ui directly.\n\n"
-        "Airline logos: use https://www.gstatic.com/flights/airline_logos/70px/<IATA>.png\n"
-        "Common codes: DL=Delta, UA=United, AA=American, WN=Southwest, B6=JetBlue, "
-        "NK=Spirit, AS=Alaska, F9=Frontier, BA=British Airways, LH=Lufthansa, "
-        "AF=Air France, EK=Emirates, QF=Qantas, SQ=Singapore Airlines, NH=ANA.\n\n"
-        "IMPORTANT: After calling a tool, do NOT repeat or summarize the data "
-        "in your text response. The tool renders UI automatically. "
-        "Just confirm what was rendered."
-    )
+    "You are a helpful assistant that creates rich visual UI.\n\n"
+    "Tool guidance:\n"
+    "- ALL flight-related queries: first call search_flights to fetch flight "
+    "data, then call display_flights with the results. NEVER use generate_a2ui "
+    "for flights.\n"
+    "- For sales/business data requests: first call get_sales_data to fetch "
+    "the latest metrics, then call generate_a2ui to visualize the results.\n"
+    "- For other rich UI: call generate_a2ui directly.\n\n"
+    "Airline logos: use https://www.gstatic.com/flights/airline_logos/70px/<IATA>.png\n"
+    "Common codes: DL=Delta, UA=United, AA=American, WN=Southwest, B6=JetBlue, "
+    "NK=Spirit, AS=Alaska, F9=Frontier, BA=British Airways, LH=Lufthansa, "
+    "AF=Air France, EK=Emirates, QF=Qantas, SQ=Singapore Airlines, NH=ANA.\n\n"
+    "IMPORTANT: After calling a tool, do NOT repeat or summarize the data "
+    "in your text response. The tool renders UI automatically. "
+    "Just confirm what was rendered."
+)
 
 CSV_PATH = Path(__file__).resolve().parent / "db.csv"
 
+
+# ── Todo state ────────────────────────────────────────────────────────────────
+
+class Todo(TypedDict):
+    id: str
+    title: str
+    completed: bool
+
+
+class AgentState(BaseAgentState):
+    todos: list[Todo]
+
+# ── Tools ─────────────────────────────────────────────────────────────────────
 
 @tool
 def query_data(query: str) -> list[dict[str, Any]]:
@@ -53,7 +71,7 @@ def query_data(query: str) -> list[dict[str, Any]]:
         reader = csv.DictReader(f)
         return list(reader)
 
-# ── Data-fetching tool (placeholder for a real database/API call) ────
+
 @tool
 def get_sales_data() -> str:
     """Fetch current sales metrics and revenue data.
@@ -61,7 +79,6 @@ def get_sales_data() -> str:
     Returns sales data including revenue, customers, conversion rates,
     and breakdowns by category and month.
     """
-    # Placeholder: in production, this would query your actual database or API.
     return json.dumps({
         "totalRevenue": "$1.2M",
         "newCustomers": 3842,
@@ -82,6 +99,9 @@ def get_sales_data() -> str:
             {"label": "Jun", "value": 125000},
         ],
     })
+
+
+# ── Flight tools ──────────────────────────────────────────────────────────────
 
 CATALOG_ID = "copilotkit://app-dashboard-catalog"
 SURFACE_ID = "flight-search-results"
@@ -119,7 +139,7 @@ FLIGHT_SCHEMA = [
         "children": ["origin-code", "arrow-text", "dest-code"], "justify": "spaceBetween", "align": "center"},
     {"id": "origin-code", "component": "Text",
         "text": {"path": "origin"}, "variant": "h3"},
-    {"id": "arrow-text", "component": "Text", "text": "\u2192", "variant": "h3"},
+    {"id": "arrow-text", "component": "Text", "text": "→", "variant": "h3"},
     {"id": "dest-code", "component": "Text",
         "text": {"path": "destination"}, "variant": "h3"},
     {"id": "divider-2", "component": "Divider"},
@@ -147,7 +167,7 @@ class Flight(TypedDict):
     status: str
     price: str
 
-# ── Data-fetching tool (placeholder for a real flight search API) ────
+
 @tool
 def search_flights(origin: str, destination: str) -> list[Flight]:
     """Search for available flights between two airports.
@@ -156,17 +176,17 @@ def search_flights(origin: str, destination: str) -> list[Flight]:
         origin: Origin airport IATA code (e.g. "SFO").
         destination: Destination airport IATA code (e.g. "JFK").
     """
-    # Placeholder: in production, this would call a real flight search API.
     return [
-        {"id": "1", "airline": "Delta Air Lines", "airlineLogo": f"https://www.gstatic.com/flights/airline_logos/70px/DL.png", "flightNumber": "DL 520", "origin": origin,
+        {"id": "1", "airline": "Delta Air Lines", "airlineLogo": "https://www.gstatic.com/flights/airline_logos/70px/DL.png", "flightNumber": "DL 520", "origin": origin,
             "destination": destination, "date": "2026-04-11", "departureTime": "08:00", "arrivalTime": "16:35", "duration": "5h 35m", "status": "On Time", "price": "$389"},
-        {"id": "2", "airline": "United Airlines", "airlineLogo": f"https://www.gstatic.com/flights/airline_logos/70px/UA.png", "flightNumber": "UA 1583", "origin": origin,
+        {"id": "2", "airline": "United Airlines", "airlineLogo": "https://www.gstatic.com/flights/airline_logos/70px/UA.png", "flightNumber": "UA 1583", "origin": origin,
             "destination": destination, "date": "2026-04-11", "departureTime": "10:15", "arrivalTime": "18:42", "duration": "5h 27m", "status": "On Time", "price": "$412"},
-        {"id": "3", "airline": "JetBlue", "airlineLogo": f"https://www.gstatic.com/flights/airline_logos/70px/B6.png", "flightNumber": "B6 416", "origin": origin,
+        {"id": "3", "airline": "JetBlue", "airlineLogo": "https://www.gstatic.com/flights/airline_logos/70px/B6.png", "flightNumber": "B6 416", "origin": origin,
             "destination": destination, "date": "2026-04-11", "departureTime": "14:30", "arrivalTime": "23:05", "duration": "5h 35m", "status": "On Time", "price": "$345"},
-        {"id": "4", "airline": "American Airlines", "airlineLogo": f"https://www.gstatic.com/flights/airline_logos/70px/AA.png", "flightNumber": "AA 178", "origin": origin,
+        {"id": "4", "airline": "American Airlines", "airlineLogo": "https://www.gstatic.com/flights/airline_logos/70px/AA.png", "flightNumber": "AA 178", "origin": origin,
             "destination": destination, "date": "2026-04-11", "departureTime": "17:00", "arrivalTime": "01:20+1", "duration": "5h 20m", "status": "On Time", "price": "$398"},
     ]
+
 
 @tool
 def display_flights(flights: list[Flight]) -> str:
@@ -184,10 +204,42 @@ def display_flights(flights: list[Flight]) -> str:
         ],
     )
 
+
+# ── Todo tools ────────────────────────────────────────────────────────────────
+
+@tool
+def manage_todos(todos: list[Todo], runtime: ToolRuntime) -> Command:
+    """Replace the entire todo list. Use this to add, edit, or remove todos."""
+    for todo in todos:
+        if not todo.get("id"):
+            todo["id"] = str(uuid.uuid4())
+
+    # Command allows agents to update state via toolcalls
+    return Command(update={
+        "todos": todos,
+        "messages": [
+            ToolMessage(
+                content="Successfully updated todos",
+                tool_call_id=runtime.tool_call_id,
+            )
+        ],
+    })
+
+
+@tool
+def get_todos(runtime: ToolRuntime):
+    """Get the current todo list."""
+    return runtime.state.get("todos", [])
+
+
+# ── Agent & app ───────────────────────────────────────────────────────────────
+
 graph = create_agent(
     model=ChatOpenAI(
         model=MODEL, **({"base_url": LITELLM_BASE_URL} if LITELLM_BASE_URL else {})),
-    tools=[query_data, get_sales_data, search_flights, display_flights],
+    tools=[query_data, get_sales_data, search_flights,
+           display_flights, manage_todos, get_todos],
+    state_schema=AgentState,
     middleware=[CopilotKitMiddleware()],
     checkpointer=MemorySaver(),
     system_prompt=SYSTEM_PROMPT,
