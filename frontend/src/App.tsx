@@ -1,7 +1,7 @@
 import { CopilotChat } from "@copilotkit/react-core/v2";
 
 
-import { useExampleDynamicSuggestions, useExampleFixedSuggestions, useExampleSuggestions } from "@/hooks/use-example-suggestions";
+import { useExampleFixedSuggestions, useExampleSuggestions } from "@/hooks/use-example-suggestions";
 import { useControlledComponents } from "./hooks/use-controlled-components";
 
 const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
@@ -12,8 +12,8 @@ export default function App() {
   useControlledComponents();
   
   useExampleSuggestions();
-  useExampleDynamicSuggestions();
   useExampleFixedSuggestions();
+  // useExampleDynamicSuggestions(); // Dynamic Schema: NOT WORKING
 
   return <CopilotChat agentId={agentId} />;
 };
