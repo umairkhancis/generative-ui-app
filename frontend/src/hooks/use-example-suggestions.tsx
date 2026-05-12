@@ -53,6 +53,14 @@ export const useTodoSuggestions = () => {
   useConfigureSuggestions({
     suggestions: [
       {
+        title: "Open todos",
+        message: "Open the todos panel.",
+      },
+      {
+        title: "Close todos",
+        message: "Close the todos panel.",
+      },
+      {
         title: "Add todos",
         message: "Add three todos about learning CopilotKit",
       },
