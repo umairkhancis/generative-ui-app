@@ -16,6 +16,7 @@ const runtime = new CopilotRuntime({
         default: langGraphAgent,
         gemini: adkAgent,
     },
+    a2ui: { injectA2UITool: true },
     mcpApps: {
         servers: [
             {
