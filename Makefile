@@ -19,6 +19,12 @@
 #   make restart-backends
 #   make logs            — tail all logs
 #   make status          — show which ports are in use
+#   make clean           — remove node_modules, .venv, build artifacts, logs
+#   make clean-frontend  — remove frontend node_modules, .vite, dist
+#   make clean-backend   — remove backend .venv, __pycache__, .pyc files
+#   make install         — install all dependencies (frontend + backend)
+#   make install-frontend — npm install in frontend/
+#   make install-backend  — create .venv and pip install -r requirements.txt
 
 ROOT        := $(shell pwd)
 BACKEND     := $(ROOT)/backend
@@ -35,7 +41,9 @@ PORTS_FRONTEND  := 4002 5173
         up-langgraph down-langgraph restart-langgraph \
         up-adk down-adk restart-adk \
         up-backends down-backends restart-backends \
-        logs status
+        logs status \
+        install install-frontend install-backend \
+        clean clean-frontend clean-backend
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -90,7 +98,7 @@ restart-frontend: down-frontend up-frontend
 
 up-langgraph: $(LOG_DIR)
 	@echo "🟢 Starting LangGraph backend (:8000)..."
-	@$(BACKEND)/.venv/bin/python $(BACKEND)/main_langgraph.py \
+	@$(BACKEND)/.venv/bin/python -u $(BACKEND)/main_langgraph.py \
 	  > $(LOG_DIR)/langgraph.log 2>&1 & \
 	  echo $$! > $(LOG_DIR)/langgraph.pid; \
 	  echo "   PID: $$(cat $(LOG_DIR)/langgraph.pid)  →  $(LOG_DIR)/langgraph.log"
@@ -106,7 +114,7 @@ restart-langgraph: down-langgraph up-langgraph
 
 up-adk: $(LOG_DIR)
 	@echo "🟢 Starting ADK/Gemini backend (:8009)..."
-	@$(BACKEND)/.venv/bin/python $(BACKEND)/main_adk.py \
+	@$(BACKEND)/.venv/bin/python -u $(BACKEND)/main_adk.py \
 	  > $(LOG_DIR)/adk.log 2>&1 & \
 	  echo $$! > $(LOG_DIR)/adk.pid; \
 	  echo "   PID: $$(cat $(LOG_DIR)/adk.pid)  →  $(LOG_DIR)/adk.log"
@@ -130,6 +138,40 @@ restart-backends: down-backends up-backends
 
 logs:
 	@tail -f $(LOG_DIR)/*.log
+
+# ── INSTALL ───────────────────────────────────────────────────────────────────
+
+install: install-frontend install-backend
+	@echo "✅ All dependencies installed."
+
+install-frontend:
+	@echo "📦 Installing frontend dependencies..."
+	@cd $(FRONTEND) && npm install
+	@echo "✅ Frontend dependencies installed."
+
+install-backend:
+	@echo "📦 Installing backend dependencies..."
+	@python3.12 -m venv $(BACKEND)/.venv
+	@$(BACKEND)/.venv/bin/pip install --upgrade pip -q
+	@$(BACKEND)/.venv/bin/pip install -r $(BACKEND)/requirements.txt
+	@echo "✅ Backend dependencies installed."
+
+# ── CLEAN ─────────────────────────────────────────────────────────────────────
+
+clean: clean-frontend clean-backend
+	@rm -rf $(LOG_DIR)
+	@echo "🧹 All clean."
+
+clean-frontend:
+	@echo "🧹 Cleaning frontend..."
+	@rm -rf $(FRONTEND)/node_modules $(FRONTEND)/.vite $(FRONTEND)/dist
+	@echo "   Removed: node_modules, .vite, dist"
+
+clean-backend:
+	@echo "🧹 Cleaning backend..."
+	@rm -rf $(BACKEND)/.venv $(BACKEND)/__pycache__ $(BACKEND)/*.pyc
+	@find $(BACKEND) -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+	@echo "   Removed: .venv, __pycache__, .pyc files"
 
 status:
 	@echo "Port status:"
