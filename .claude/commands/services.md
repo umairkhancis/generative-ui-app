@@ -1,4 +1,4 @@
-Manage app services (frontend, LangGraph backend, ADK/Gemini backend) using the Makefile.
+Manage app services (frontend, LangGraph backend) using the Makefile.
 
 Parse the user's request and run the correct make target from the project root.
 
@@ -12,15 +12,9 @@ Parse the user's request and run the correct make target from the project root.
 | start frontend | `make up-frontend` |
 | stop frontend | `make down-frontend` |
 | restart frontend | `make restart-frontend` |
-| start langgraph / default backend | `make up-langgraph` |
+| start langgraph backend | `make up-langgraph` |
 | stop langgraph | `make down-langgraph` |
 | restart langgraph | `make restart-langgraph` |
-| start adk / gemini backend | `make up-adk` |
-| stop adk | `make down-adk` |
-| restart adk | `make restart-adk` |
-| start both backends | `make up-backends` |
-| stop both backends | `make down-backends` |
-| restart both backends | `make restart-backends` |
 | show logs | `make logs` |
 | check status / what's running | `make status` |
 

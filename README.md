@@ -1,31 +1,28 @@
 # Generative UI App
 
-A demo app that puts a CopilotKit chat in front of two interchangeable AI agent backends — Google ADK (Gemini) and LangGraph (OpenAI). Switch between them with a single line of frontend code.
+A focused demo of **controlled generative UI** and **shared agent state** with CopilotKit. Theme: a Talabat-style food-delivery ordering journey — discover → menu → cart (live canvas) → checkout → tracking — backed by a CSV "database" and a LangGraph (OpenAI) agent.
 
 ## Stack
 
 - **Frontend** — React 19 + Vite 6 + Tailwind 4, CopilotKit chat UI
-- **Runtime** — Node + Hono, multiplexes the two agent backends behind one HTTP endpoint
-- **Backend** — Python 3.12 + FastAPI, two separate processes:
-  - Google ADK `LlmAgent` running Gemini 2.0 Flash
-  - LangChain `create_agent` running OpenAI `gpt-4.1` over LangGraph
+- **Runtime** — Node + Hono, exposes the agent over `/api/copilotkit`
+- **Backend** — Python 3.12 + FastAPI: LangChain `create_agent` over LangGraph, running OpenAI `gpt-4.1`. Pure-Python food-delivery domain lives in `backend/food/` (no framework deps).
 
 ## How it fits together
 
 ```
 Browser ──► Vite :5173
-              └── /api/copilotkit ──► CopilotKit runtime :4002
-                                        ├── agentId "default" ──► LangGraph :8000
-                                        └── agentId "gemini"  ──► ADK       :8009
+              └── /api/copilotkit ──► CopilotKit Node runtime :4002
+                                        └── LangGraph backend :8000
 ```
 
-The browser only ever talks to Vite. Vite proxies CopilotKit calls to the Node runtime, which then routes to whichever Python backend the React app asked for via its `agentId`.
+The browser only ever talks to Vite. Vite proxies CopilotKit calls to the Node runtime, which forwards them to the Python agent.
 
 ## Prerequisites
 
 - **Python 3.12** (`brew install python@3.12` on macOS)
-- **Node 20+**
-- API keys: `OPENAI_API_KEY` (LangGraph backend) and `GOOGLE_API_KEY` (ADK backend)
+- **Node 22+** (for `--watch` and `--env-file-if-exists`)
+- `OPENAI_API_KEY`
 
 ## Setup
 
@@ -36,7 +33,7 @@ cd backend
 python3.12 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 cp .env.example .env
-# edit .env and fill in OPENAI_API_KEY and GOOGLE_API_KEY
+# edit .env and fill in OPENAI_API_KEY
 ```
 
 ### 2. Frontend
@@ -44,95 +41,83 @@ cp .env.example .env
 ```bash
 cd frontend
 npm install
+cp .env.example .env   # default points LANGGRAPH_DEPLOYMENT_URL at localhost:8000
 ```
 
 ## Run
 
-You need **three terminals** — one per process. None of them daemonize themselves.
+The project Makefile is the simplest path:
 
-**Terminal 1 — ADK backend (Gemini)**
 ```bash
-cd backend
-.venv/bin/python main_adk.py
-# serves http://localhost:8009
+make restart   # kill any leftover ports, start LangGraph + frontend
+make logs      # tail combined logs
 ```
 
-**Terminal 2 — LangGraph backend (OpenAI)**
-```bash
-cd backend
-.venv/bin/python main_langgraph.py
-# serves http://localhost:8000
-```
+Or, manually in two terminals:
 
-**Terminal 3 — Frontend (Vite + CopilotKit runtime)**
 ```bash
-cd frontend
-npm run dev
-# Vite at http://localhost:5173, CopilotKit runtime at :4002
+# Terminal 1
+cd backend && .venv/bin/python main_langgraph.py
+
+# Terminal 2
+cd frontend && npm run dev
 ```
 
 Open http://localhost:5173.
 
-### Stopping everything
-
-```bash
-for p in 8000 8009 4002 5173; do kill -9 $(lsof -ti:$p) 2>/dev/null; done
-```
-
-## Switching agents
-
-Edit `frontend/src/App.tsx`:
-
-```ts
-export const agentId = "default";  // LangGraph (OpenAI)
-// export const agentId = "gemini";  // ADK (Gemini)
-```
-
-The mapping `agentId → backend URL` lives in `frontend/server.ts`. Add a new agent by adding a new entry there and a matching FastAPI process.
-
 ## Configuration
 
-Override backend URLs without code changes:
+`frontend/server.ts` reads `LANGGRAPH_DEPLOYMENT_URL` from `frontend/.env` (loaded via Node's `--env-file-if-exists`). Point it at a remote LangGraph deployment by editing the file:
 
-```bash
-LANGGRAPH_DEPLOYMENT_URL=http://other-host:8000 \
-ADK_AGENT_URL=http://other-host:8009 \
-npm run dev
 ```
+LANGGRAPH_DEPLOYMENT_URL=https://my-langgraph.example.com
+```
+
+There is no hardcoded fallback — the server throws at startup if it's unset.
+
+## What to read first
+
+If you want to understand CopilotKit's two key primitives:
+
+- **Controlled GenUI** — `frontend/src/hooks/use-controlled-components.tsx`. One screen of `useComponent({ name, description, parameters, render })` registrations. The agent calls these by name; the runtime renders them inline in chat.
+- **Shared state** — `backend/main_langgraph.py` declares the shared fields on `AgentState`. Tools mutate via `Command(update={cart: ...})`; the React side reads with `useAgent(...).state.cart` and writes with `.setState(...)`. The cart card is registered as a controlled component AND subscribes to that same shared state — so the agent and the UI converge on a single source of truth.
 
 ## Project layout
 
 ```
 backend/
-  main_adk.py         # ADK + Gemini, FastAPI on :8009
-  main_langgraph.py   # LangGraph + OpenAI, FastAPI on :8000
-  helper.py           # notebook helpers (not used by servers)
+  food/                 # pure-Python food-delivery package (no framework deps)
+    __init__.py
+    catalog.py          # CSV-backed restaurant & menu queries
+    cart.py             # pure cart operations
+    orders.py           # placement + time-progressed status
+    _seed.py            # regenerates db/ CSVs
+    db/
+      restaurants.csv
+      menu_items.csv
+  main_langgraph.py     # LangGraph agent + CopilotKit middleware (framework wiring only)
   requirements.txt
   .env.example
 frontend/
-  server.ts           # CopilotKit runtime, routes agentId → backend
-  watch-server.ts     # auto-restarts server.ts on edit
-  vite.config.ts      # proxies /api/copilotkit → :4002
+  server.ts             # CopilotKit Node runtime
+  vite.config.ts        # proxies /api/copilotkit → :4002
   src/
-    App.tsx           # picks the agent via `agentId`
-    main.tsx          # CopilotKit provider
-    error-boundary.tsx
-    global.css
-CLAUDE.md             # notes for Claude Code
+    App.tsx             # CartPanel side panel (canvas), reads/writes agent.state.cart
+    main.tsx            # CopilotKit provider
+    hooks/
+      use-controlled-components.tsx
+      use-example-suggestions.tsx
+    components/         # registered GenUI components + side panel
+    lib/cart.ts         # shared cart math (mirrors backend snapshot)
+  .env.example
+CLAUDE.md               # notes for Claude Code agents
 ```
 
 ## Common issues
 
-- **`openai.RateLimitError: insufficient_quota`** — your OpenAI account has no credit. Either add billing, or switch to the `gemini` agent in `App.tsx` to bypass OpenAI entirely.
-- **`ModuleNotFoundError` on backend startup** — the venv is using the system Python (often 3.9). `copilotkit` requires Python 3.10+; this repo is set up for 3.12. Recreate the venv with `python3.12 -m venv .venv`.
-- **`INCOMPLETE_STREAM` in the chat UI** — the upstream Python backend errored mid-stream. Check that backend's terminal for the real traceback.
-- **Port already in use** — run the kill snippet above before starting again.
-
-## Tests
-
-Playwright is wired up but the `e2e/` directory is currently empty.
-
-```bash
-cd frontend
-npm run test:e2e
-```
+- **`LANGGRAPH_DEPLOYMENT_URL is not set`** — copy `frontend/.env.example` to `frontend/.env`.
+- **`openai.RateLimitError: insufficient_quota`** — your OpenAI account has no credit; add billing.
+- **`ModuleNotFoundError` on backend startup** — the venv is using the system Python. `copilotkit` requires 3.10+; this repo is set up for 3.12. Recreate the venv with `python3.12 -m venv .venv`.
+- **`INCOMPLETE_STREAM` in the chat UI** — the Python backend errored mid-stream. Tail `scripts/.logs/langgraph.log` for the real traceback.
+- **Port already in use** — `make restart`.
+- **`InvalidUpdateError: At key 'cart'`** — two writes to the same state channel in one LangGraph tick. The repo handles this by annotating `cart`/`todos` with a `_last_write_wins` reducer. If you add new shared-state fields, do the same.

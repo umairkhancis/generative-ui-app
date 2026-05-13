@@ -1,5 +1,5 @@
 # Makefile — generative-ui-app
-# Manages LangGraph (:8000), ADK/Gemini (:8009), and Frontend (:4002/:5173)
+# Manages LangGraph (:8000) and Frontend (:4002/:5173)
 #
 # Usage:
 #   make up              — start all services
@@ -11,12 +11,6 @@
 #   make up-langgraph    — start LangGraph backend only
 #   make down-langgraph  — stop LangGraph backend only
 #   make restart-langgraph
-#   make up-adk          — start ADK/Gemini backend only
-#   make down-adk        — stop ADK/Gemini backend only
-#   make restart-adk
-#   make up-backends     — start both backends
-#   make down-backends   — stop both backends
-#   make restart-backends
 #   make logs            — tail all logs
 #   make status          — show which ports are in use
 #   make clean           — remove node_modules, .venv, build artifacts, logs
@@ -31,16 +25,13 @@ BACKEND     := $(ROOT)/backend
 FRONTEND    := $(ROOT)/frontend
 LOG_DIR     := $(ROOT)/scripts/.logs
 
-PORTS_ALL       := 8000 8009 4002 5173
+PORTS_ALL       := 8000 4002 5173
 PORTS_LANGGRAPH := 8000
-PORTS_ADK       := 8009
 PORTS_FRONTEND  := 4002 5173
 
 .PHONY: up down restart \
         up-frontend down-frontend restart-frontend \
         up-langgraph down-langgraph restart-langgraph \
-        up-adk down-adk restart-adk \
-        up-backends down-backends restart-backends \
         logs status \
         install install-frontend install-backend \
         clean clean-frontend clean-backend
@@ -62,11 +53,10 @@ endef
 
 # ── ALL ───────────────────────────────────────────────────────────────────────
 
-up: $(LOG_DIR) up-langgraph up-adk up-frontend
+up: $(LOG_DIR) up-langgraph up-frontend
 	@echo ""
 	@echo "✅ All services up."
 	@echo "   LangGraph  :8000  →  $(LOG_DIR)/langgraph.log"
-	@echo "   ADK/Gemini :8009  →  $(LOG_DIR)/adk.log"
 	@echo "   Frontend   :4002/:5173  →  $(LOG_DIR)/frontend.log"
 	@echo ""
 	@echo "   Tail logs:  make logs"
@@ -109,30 +99,6 @@ down-langgraph:
 	@echo "✅ LangGraph stopped."
 
 restart-langgraph: down-langgraph up-langgraph
-
-# ── ADK ───────────────────────────────────────────────────────────────────────
-
-up-adk: $(LOG_DIR)
-	@echo "🟢 Starting ADK/Gemini backend (:8009)..."
-	@$(BACKEND)/.venv/bin/python -u $(BACKEND)/main_adk.py \
-	  > $(LOG_DIR)/adk.log 2>&1 & \
-	  echo $$! > $(LOG_DIR)/adk.pid; \
-	  echo "   PID: $$(cat $(LOG_DIR)/adk.pid)  →  $(LOG_DIR)/adk.log"
-
-down-adk:
-	@echo "🔴 Stopping ADK/Gemini..."
-	$(call kill-ports,$(PORTS_ADK))
-	@echo "✅ ADK stopped."
-
-restart-adk: down-adk up-adk
-
-# ── BOTH BACKENDS ─────────────────────────────────────────────────────────────
-
-up-backends: up-langgraph up-adk
-
-down-backends: down-langgraph down-adk
-
-restart-backends: down-backends up-backends
 
 # ── UTILS ─────────────────────────────────────────────────────────────────────
 

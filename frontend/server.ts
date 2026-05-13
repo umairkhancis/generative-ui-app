@@ -1,30 +1,21 @@
 import { CopilotRuntime, createCopilotHonoHandler } from "@copilotkit/runtime/v2";
-import { HttpAgent } from "@ag-ui/client";
 import { LangGraphHttpAgent } from "@copilotkit/runtime/langgraph";
 import { serve } from "@hono/node-server";
 
-const langGraphAgent = new LangGraphHttpAgent({
-    url: process.env.LANGGRAPH_DEPLOYMENT_URL || "http://localhost:8000",
-});
+const LANGGRAPH_DEPLOYMENT_URL = process.env.LANGGRAPH_DEPLOYMENT_URL;
+if (!LANGGRAPH_DEPLOYMENT_URL) {
+    throw new Error(
+        "LANGGRAPH_DEPLOYMENT_URL is not set. Copy frontend/.env.example to frontend/.env, or export the variable in your shell.",
+    );
+}
 
-const adkAgent = new HttpAgent({
-    url: process.env.ADK_AGENT_URL || "http://localhost:8009",
+const langGraphAgent = new LangGraphHttpAgent({
+    url: LANGGRAPH_DEPLOYMENT_URL,
 });
 
 const runtime = new CopilotRuntime({
     agents: {
         default: langGraphAgent,
-        gemini: adkAgent,
-    },
-    a2ui: { injectA2UITool: true },
-    mcpApps: {
-        servers: [
-            {
-                type: "http",
-                url: "https://mcp.excalidraw.com",
-                serverId: "example_mcp_server", // com.excalidraw.mcp
-            }
-        ],
     },
 });
 
