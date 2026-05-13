@@ -12,7 +12,7 @@ Browser → Vite (5173)
                                           └── agentId "default" → LangGraph backend (8000, Python/FastAPI)
 ```
 
-- **`backend/main_langgraph.py`** (`:8000`) — LangChain `create_agent` (OpenAI `gpt-4.1`) wrapped with `CopilotKitMiddleware` and a `MemorySaver` checkpointer, exposed via `add_langgraph_fastapi_endpoint(path="/")`. Framework wiring only — domain logic lives in `backend/food/`.
+- **`backend/main.py`** (`:8000`) — FastAPI entry that mounts the assembled `agent` (built inside `backend/agent/`) at `path="/"`. Zero agent construction lives here — see `backend/agent/agent.py` for the LangChain `create_agent` + AG-UI wrapping.
 - **`backend/food/`** — pure-Python food-delivery package (no framework deps). `catalog.py` reads the CSV "db" at `food/db/`. `cart.py` and `orders.py` are pure functions over snapshots. `_seed.py` regenerates the CSVs.
 - **`frontend/server.ts`** — defines a `CopilotRuntime` with one agent (`default` → LangGraph). Run by `node --watch --import tsx/esm server.ts` (built-in Node watch, no custom watcher).
 - **`frontend/src/App.tsx`** — `agentId = "default"`. Reads/writes shared agent state (`cart`, `todos`) via `useAgent`. Side panel renders `CartPanel` (canvas-mode shared state); `TodoList` is kept commented for reference.
@@ -30,7 +30,7 @@ cd backend
 python3.12 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 cp .env.example .env   # then fill OPENAI_API_KEY
-.venv/bin/python main_langgraph.py   # LangGraph on :8000
+.venv/bin/python main.py   # LangGraph on :8000
 ```
 
 ### Frontend
@@ -61,7 +61,7 @@ make logs      # tail combined logs
 This codebase is deliberately small so the primitives stand out:
 
 - **Controlled GenUI** — `useComponent({ name, description, parameters, render })` registers a React component the LLM can call by name. Registrations live in `frontend/src/hooks/use-controlled-components.tsx`.
-- **Shared state** — fields on `AgentState` (in `main_langgraph.py`) are auto-synced both ways. Frontend reads via `useAgent({agentId:"default"}).state.<field>` and writes via `.setState({<field>: ...})`. Tools write via `Command(update={<field>: ...})`. The `cart` channel uses a `_last_write_wins` reducer to allow concurrent updates from both sides in the same LangGraph tick.
+- **Shared state** — fields on `AgentState` (in `backend/agent/state.py`) are auto-synced both ways. Frontend reads via `useAgent({agentId:"default"}).state.<field>` and writes via `.setState({<field>: ...})`. Tools write via `Command(update={<field>: ...})`. The `cart` channel uses a `_last_write_wins` reducer to allow concurrent updates from both sides in the same LangGraph tick.
 - **Canvas-mode component** — `CartSummaryCard` is registered via `useComponent` (controlled GenUI) AND subscribes to `agent.state.cart` via `useAgent` (shared state). Same is true of the side `CartPanel`. They render the same source of truth.
 
 ## Gotchas

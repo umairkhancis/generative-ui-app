@@ -57,7 +57,7 @@ Or, manually in two terminals:
 
 ```bash
 # Terminal 1
-cd backend && .venv/bin/python main_langgraph.py
+cd backend && .venv/bin/python main.py
 
 # Terminal 2
 cd frontend && npm run dev
@@ -80,7 +80,7 @@ There is no hardcoded fallback — the server throws at startup if it's unset.
 If you want to understand CopilotKit's two key primitives:
 
 - **Controlled GenUI** — `frontend/src/hooks/use-controlled-components.tsx`. One screen of `useComponent({ name, description, parameters, render })` registrations. The agent calls these by name; the runtime renders them inline in chat.
-- **Shared state** — `backend/main_langgraph.py` declares the shared fields on `AgentState`. Tools mutate via `Command(update={cart: ...})`; the React side reads with `useAgent(...).state.cart` and writes with `.setState(...)`. The cart card is registered as a controlled component AND subscribes to that same shared state — so the agent and the UI converge on a single source of truth.
+- **Shared state** — `backend/agent/state.py` declares the shared fields on `AgentState`. Tools mutate via `Command(update={cart: ...})`; the React side reads with `useAgent(...).state.cart` and writes with `.setState(...)`. The cart card is registered as a controlled component AND subscribes to that same shared state — so the agent and the UI converge on a single source of truth.
 
 ## Project layout
 
@@ -95,7 +95,8 @@ backend/
     db/
       restaurants.csv
       menu_items.csv
-  main_langgraph.py     # LangGraph agent + CopilotKit middleware (framework wiring only)
+  agent/                # LangGraph + CopilotKit wiring (state, tools, prompt, graph)
+  main.py               # FastAPI entry — mounts the assembled agent
   requirements.txt
   .env.example
 frontend/

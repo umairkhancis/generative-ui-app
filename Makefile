@@ -88,7 +88,7 @@ restart-frontend: down-frontend up-frontend
 
 up-langgraph: $(LOG_DIR)
 	@echo "🟢 Starting LangGraph backend (:8000)..."
-	@$(BACKEND)/.venv/bin/python -u $(BACKEND)/main_langgraph.py \
+	@$(BACKEND)/.venv/bin/python -u $(BACKEND)/main.py \
 	  > $(LOG_DIR)/langgraph.log 2>&1 & \
 	  echo $$! > $(LOG_DIR)/langgraph.pid; \
 	  echo "   PID: $$(cat $(LOG_DIR)/langgraph.pid)  →  $(LOG_DIR)/langgraph.log"

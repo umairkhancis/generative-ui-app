@@ -7,7 +7,7 @@ The package is split by concern so each file is small and focused:
     orders.py  — order placement & time-progressed status tracking
 
 Nothing in this package imports LangGraph / CopilotKit. The framework
-adapter (`main_langgraph.py`) imports these functions and wraps them in
+adapter (`main.py`) imports these functions and wraps them in
 `@tool` decorators.
 
 CSV files live under `food/db/`.
