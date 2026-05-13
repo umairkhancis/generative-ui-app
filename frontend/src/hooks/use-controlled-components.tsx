@@ -1,41 +1,26 @@
+// CONTROLLED GENERATIVE UI — registration site.
+//
+// `useComponent` (from @copilotkit/react-core/v2) tells the CopilotKit runtime
+// that a named React component is callable by the agent as if it were a tool.
+// When the agent calls e.g. `restaurantCarousel({ restaurants: [...] })`,
+// the runtime invokes `render(args)` here and inserts the rendered React
+// element inline in the chat transcript. The `parameters` Zod schema is
+// surfaced to the LLM so it knows the expected shape.
+//
+// Every component listed below is a "controlled" GenUI component: developer
+// has defined the visual + the schema, the agent decides when to render it
+// and supplies the data.
 import { CartSummaryCard, CartSummaryCardProps } from "@/components/cart-summary-card";
-import { FlightCard, FlightCardProps } from "@/components/flight-card";
 import { MenuItemCard, MenuItemCardProps } from "@/components/menu-item-card";
 import { MenuItemCarousel, MenuItemCarouselProps } from "@/components/menu-item-carousel";
 import { OrderConfirmationCard, OrderConfirmationCardProps } from "@/components/order-confirmation-card";
 import { OrderTrackingCard, OrderTrackingCardProps } from "@/components/order-tracking-card";
-import { PieChart, PieChartProps } from "@/components/pie-chart";
 import { RestaurantCard, RestaurantCardProps } from "@/components/restaurant-card";
 import { RestaurantCarousel, RestaurantCarouselProps } from "@/components/restaurant-carousel";
 import { useComponent } from "@copilotkit/react-core/v2";
-import { z } from "zod";
 
 export const useControlledComponents = () => {
-  // 🪁 Register a component that shows the name of the user
-  useComponent({
-    name: "showMyName",
-    description: "Show the user's name in a card",
-    parameters: z.object({ name: z.string() }),
-    render: ({ name }) => <div className="bg-blue-500 p-4">Hi, {name}!</div>,
-  });
-
-  // 🪁 Resgister a pieChart component to show structured data
-  useComponent({
-    name: "pieChart",
-    description: "Controlled Generative UI that displays data as a pie chart.",
-    parameters: PieChartProps,
-    render: PieChart,
-  });
-
-  // 🪁 Resgister a flightCard component to show flight data
-  useComponent({
-    name: "flightCard",
-    description: "Controlled Generative UI that displays a single flight summary card.",
-    parameters: FlightCardProps,
-    render: FlightCard,
-  });
-
-  // 🪁 Register a restaurantCard component for food-delivery discovery
+  // Single-restaurant card.
   useComponent({
     name: "restaurantCard",
     description:
@@ -44,7 +29,7 @@ export const useControlledComponents = () => {
     render: RestaurantCard,
   });
 
-  // 🪁 Register a menuItemCard component for food-delivery menu browsing
+  // Single-menu-item card.
   useComponent({
     name: "menuItemCard",
     description:
@@ -53,7 +38,8 @@ export const useControlledComponents = () => {
     render: MenuItemCard,
   });
 
-  // 🪁 Register a restaurantCarousel for showing multiple restaurants together
+  // Horizontal carousel of restaurant cards — preferred over multiple
+  // single-card calls when showing several restaurants together.
   useComponent({
     name: "restaurantCarousel",
     description:
@@ -62,7 +48,7 @@ export const useControlledComponents = () => {
     render: RestaurantCarousel,
   });
 
-  // 🪁 Register a menuItemCarousel for showing multiple menu items together
+  // Horizontal carousel of menu items.
   useComponent({
     name: "menuItemCarousel",
     description:
@@ -71,16 +57,10 @@ export const useControlledComponents = () => {
     render: MenuItemCarousel,
   });
 
-  // 🪁 Register an orderTrackingCard component for post-checkout tracking
-  useComponent({
-    name: "orderTrackingCard",
-    description:
-      "Controlled Generative UI that shows order tracking progression (confirming → preparing → delivering → delivered) with ETA and items.",
-    parameters: OrderTrackingCardProps,
-    render: OrderTrackingCard,
-  });
-
-  // 🪁 Register a cartSummaryCard for cart review during the ordering journey
+  // Live cart card — also a SHARED-STATE canvas. The component subscribes
+  // to `agent.state.cart` via `useAgent` and writes back with `setState`.
+  // Tool-side updates flow in through `Command(update={cart: ...})` from the
+  // backend, so both directions converge on a single source of truth.
   useComponent({
     name: "cartSummaryCard",
     description:
@@ -89,12 +69,21 @@ export const useControlledComponents = () => {
     render: CartSummaryCard,
   });
 
-  // 🪁 Register an orderConfirmationCard shown right after place_order
+  // After place_order succeeds — confirmation view.
   useComponent({
     name: "orderConfirmationCard",
     description:
       "Controlled Generative UI that confirms an order was placed: order id, restaurant, items, total, ETA and delivery address. Use immediately after place_order succeeds.",
     parameters: OrderConfirmationCardProps,
     render: OrderConfirmationCard,
+  });
+
+  // Live order tracking — status progresses with time on the backend.
+  useComponent({
+    name: "orderTrackingCard",
+    description:
+      "Controlled Generative UI that shows order tracking progression (confirming → preparing → delivering → delivered) with ETA and items.",
+    parameters: OrderTrackingCardProps,
+    render: OrderTrackingCard,
   });
 };

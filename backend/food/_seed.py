@@ -1,8 +1,8 @@
-"""Seed script: produces restaurants.csv and menu_items.csv in this folder.
+"""Seed script: produces restaurants.csv and menu_items.csv in `food/db/`.
 
-Run once to (re)populate the mock catalogue used by `backend/food_data.py`:
+Run once to (re)populate the mock catalogue used by `backend/food/`:
 
-    .venv/bin/python backend/data/_seed_food_data.py
+    .venv/bin/python backend/food/_seed.py
 
 Deterministic — uses a seeded RNG. Re-running overwrites the files.
 """
@@ -14,9 +14,9 @@ import random
 from pathlib import Path
 from typing import Any
 
-DATA_DIR = Path(__file__).resolve().parent
-RESTAURANTS_CSV = DATA_DIR / "restaurants.csv"
-MENU_ITEMS_CSV = DATA_DIR / "menu_items.csv"
+DB_DIR = Path(__file__).resolve().parent / "db"
+RESTAURANTS_CSV = DB_DIR / "restaurants.csv"
+MENU_ITEMS_CSV = DB_DIR / "menu_items.csv"
 
 _SEED = 42
 
@@ -442,7 +442,7 @@ def _build_dataset() -> tuple[list[list[Any]], list[list[Any]]]:
 
 
 def main() -> None:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    DB_DIR.mkdir(parents=True, exist_ok=True)
     rest_rows, item_rows = _build_dataset()
 
     with RESTAURANTS_CSV.open("w", newline="", encoding="utf-8") as f:
