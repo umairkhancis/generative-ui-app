@@ -159,7 +159,7 @@ export function CartPanel({ cart, onUpdate, onCheckout, isRunning, onClose }: Ca
               className="w-full mt-2 py-2 rounded-lg text-sm font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50"
               style={{ backgroundColor: BRAND }}
             >
-              Checkout
+              Place Order
             </button>
           </div>
         </>

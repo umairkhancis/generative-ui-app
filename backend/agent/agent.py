@@ -49,11 +49,16 @@ graph = create_agent(
     middleware=[CopilotKitMiddleware()],
     checkpointer=MemorySaver(),
     system_prompt=SYSTEM_PROMPT,
-).with_config({"recursion_limit": RECURSION_LIMIT})
+)
 
 
+# `config` here is what AGUI passes to `graph.astream_events` (see
+# ag_ui_langgraph/agent.py:199). `graph.with_config(...)` does NOT reach
+# this code path — the agent constructor's `config` arg is the only one
+# that propagates to the LangGraph streaming layer.
 agent = LangGraphAGUIAgent(
     name="food_delivery_agent",
     description="Talabat-style food-delivery agent with controlled GenUI + shared state.",
     graph=graph,
+    config={"recursion_limit": RECURSION_LIMIT},
 )

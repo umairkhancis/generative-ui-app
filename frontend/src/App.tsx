@@ -47,8 +47,7 @@ export default function App() {
     agent.addMessage({
       id: crypto.randomUUID(),
       role: "user",
-      content:
-        "Please show me the final order summary so I can review and place the order.",
+      content: "Place my order. Deliver to 12 Sheikh Zayed Road.",
     });
     await agent.runAgent();
   };
