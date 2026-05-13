@@ -162,7 +162,11 @@ def search_menu_items(
     return [i for _, i in scored[: max(0, limit)]]
 
 
-# ── Cart state ────────────────────────────────────────────────────────────────
+# ── Cart helpers (pure functions over a cart snapshot) ────────────────────────
+#
+# Cart state lives in LangGraph AgentState (so it's shared between the agent
+# and the frontend canvas card). These functions are pure: they take the
+# current cart snapshot and return a new one. No module globals.
 
 _PRICE_RE = re.compile(r"AED\s*(\d+(?:\.\d+)?)", re.IGNORECASE)
 
@@ -174,15 +178,14 @@ def _parse_price(s: str) -> float:
     return float(m.group(1)) if m else 0.0
 
 
-# Demo-scoped singleton cart (one conversation = one cart).
-_cart: dict[str, int] = {}
-_cart_restaurant_id: str | None = None
-
-
-def _cart_snapshot() -> dict[str, Any]:
+def _compute_snapshot(
+    quantities: dict[str, int], restaurant_id: str | None
+) -> dict[str, Any]:
     items: list[dict[str, Any]] = []
     subtotal = 0.0
-    for iid, qty in _cart.items():
+    for iid, qty in quantities.items():
+        if qty <= 0:
+            continue
         item = _ITEM_INDEX.get(iid)
         if not item:
             continue
@@ -197,72 +200,72 @@ def _cart_snapshot() -> dict[str, Any]:
             "quantity": qty,
             "line_total": f"AED {line:.0f}",
         })
-    restaurant = (
-        _RESTAURANT_INDEX.get(_cart_restaurant_id)
-        if _cart_restaurant_id else None
-    )
+    restaurant = _RESTAURANT_INDEX.get(restaurant_id) if restaurant_id else None
     delivery_fee_val = _parse_price(restaurant["delivery_fee"]) if restaurant else 0.0
     total = subtotal + delivery_fee_val
     return {
-        "restaurant_id": _cart_restaurant_id,
+        "restaurant_id": restaurant_id if restaurant else None,
         "restaurant": restaurant["name"] if restaurant else None,
         "items": items,
         "subtotal": f"AED {subtotal:.0f}",
         "delivery_fee": restaurant["delivery_fee"] if restaurant else "Free",
         "total": f"AED {total:.0f}",
-        "item_count": sum(_cart.values()),
+        "item_count": sum(q for q in quantities.values() if q > 0),
     }
 
 
-def add_to_cart(item_id: str, quantity: int = 1) -> dict[str, Any]:
-    """Add `quantity` of an item to the cart. Switching restaurants replaces the cart."""
-    global _cart, _cart_restaurant_id
+def _quantities_from_cart(cart: dict[str, Any] | None) -> tuple[dict[str, int], str | None]:
+    if not cart:
+        return {}, None
+    quantities = {i["id"]: int(i.get("quantity") or 0) for i in cart.get("items", []) or []}
+    return quantities, cart.get("restaurant_id")
+
+
+def empty_cart() -> dict[str, Any]:
+    return _compute_snapshot({}, None)
+
+
+def cart_add(cart: dict[str, Any] | None, item_id: str, quantity: int = 1) -> dict[str, Any]:
     item = _ITEM_INDEX.get(item_id)
     if not item:
-        return {"error": f"Unknown item id: {item_id}", "cart": _cart_snapshot()}
+        return cart or empty_cart()
     qty = max(1, int(quantity))
-    if _cart_restaurant_id is None:
-        _cart_restaurant_id = item["restaurant_id"]
-    elif _cart_restaurant_id != item["restaurant_id"]:
-        _cart = {}
-        _cart_restaurant_id = item["restaurant_id"]
-    _cart[item_id] = _cart.get(item_id, 0) + qty
-    return _cart_snapshot()
+    quantities, rid = _quantities_from_cart(cart)
+    if rid is None:
+        rid = item["restaurant_id"]
+    elif rid != item["restaurant_id"]:
+        # Switching restaurants resets the cart.
+        quantities = {}
+        rid = item["restaurant_id"]
+    quantities[item_id] = quantities.get(item_id, 0) + qty
+    return _compute_snapshot(quantities, rid)
 
 
-def update_cart_item(item_id: str, quantity: int) -> dict[str, Any]:
-    """Set the exact quantity for an item; quantity ≤ 0 removes it."""
-    global _cart, _cart_restaurant_id
+def cart_update(cart: dict[str, Any] | None, item_id: str, quantity: int) -> dict[str, Any]:
+    quantities, rid = _quantities_from_cart(cart)
     if quantity <= 0:
-        _cart.pop(item_id, None)
+        quantities.pop(item_id, None)
     else:
         item = _ITEM_INDEX.get(item_id)
         if not item:
-            return {"error": f"Unknown item id: {item_id}", "cart": _cart_snapshot()}
-        if _cart_restaurant_id is None:
-            _cart_restaurant_id = item["restaurant_id"]
-        elif _cart_restaurant_id != item["restaurant_id"]:
-            _cart = {}
-            _cart_restaurant_id = item["restaurant_id"]
-        _cart[item_id] = int(quantity)
-    if not _cart:
-        _cart_restaurant_id = None
-    return _cart_snapshot()
+            return cart or empty_cart()
+        if rid is None:
+            rid = item["restaurant_id"]
+        elif rid != item["restaurant_id"]:
+            quantities = {}
+            rid = item["restaurant_id"]
+        quantities[item_id] = int(quantity)
+    if not quantities:
+        rid = None
+    return _compute_snapshot(quantities, rid)
 
 
-def remove_from_cart(item_id: str) -> dict[str, Any]:
-    return update_cart_item(item_id, 0)
+def cart_remove(cart: dict[str, Any] | None, item_id: str) -> dict[str, Any]:
+    return cart_update(cart, item_id, 0)
 
 
-def clear_cart() -> dict[str, Any]:
-    global _cart, _cart_restaurant_id
-    _cart = {}
-    _cart_restaurant_id = None
-    return _cart_snapshot()
-
-
-def view_cart() -> dict[str, Any]:
-    return _cart_snapshot()
+def cart_clear() -> dict[str, Any]:
+    return empty_cart()
 
 
 # ── Order state & tracking ────────────────────────────────────────────────────
@@ -297,11 +300,13 @@ def _derive_status(placed_at: float) -> tuple[str, str]:
     return "delivered", "Arrived"
 
 
-def place_order(delivery_address: str | None = None) -> dict[str, Any]:
-    """Convert the current cart into an order and clear the cart."""
-    global _cart, _cart_restaurant_id, _latest_order_id
-    snap = _cart_snapshot()
-    if not snap["items"]:
+def place_order(
+    cart: dict[str, Any] | None, delivery_address: str | None = None
+) -> dict[str, Any]:
+    """Convert the given cart snapshot into an order. Caller must clear the cart."""
+    global _latest_order_id
+    snap = cart or empty_cart()
+    if not snap.get("items"):
         return {"error": "Cart is empty. Add items before placing an order."}
     oid = f"TLB-{uuid.uuid4().hex[:4].upper()}"
     order = {
@@ -320,8 +325,6 @@ def place_order(delivery_address: str | None = None) -> dict[str, Any]:
     }
     _orders[oid] = order
     _latest_order_id = oid
-    _cart = {}
-    _cart_restaurant_id = None
     status, eta = _derive_status(order["placed_at"])
     return {
         "order_id": oid,

@@ -70,12 +70,21 @@ SYSTEM_PROMPT = (
     "   → render `menuItemCarousel`.\n"
     "5. ADD TO CART — user says 'add X to cart' / 'order N of Y':\n"
     "   → call `add_to_cart(item_id, quantity?)` using item ids from prior "
-    "menu results. Then render `cartSummaryCard` with the returned snapshot.\n"
+    "menu results. Then render `cartSummaryCard` to show the cart.\n"
     "6. EDIT CART — change quantity / remove / clear:\n"
     "   → call `update_cart_item(item_id, quantity)`, `remove_cart_item`, or "
-    "`clear_cart`. Render `cartSummaryCard`.\n"
-    "7. VIEW CART — 'show my cart' / 'what's in my order':\n"
-    "   → call `view_cart()` → render `cartSummaryCard`.\n"
+    "`clear_cart`. Render `cartSummaryCard` if not already visible.\n"
+    "7. VIEW CART / CART QUESTIONS — 'show my cart', 'what's in my order', "
+    "'how many items?', 'what's my total?', etc.:\n"
+    "   → FIRST call `view_cart()` to refresh your knowledge of the cart "
+    "from shared state. THEN answer / render `cartSummaryCard`.\n"
+    "   ⚠️  CRITICAL: `cartSummaryCard` is a LIVE canvas. The user can click "
+    "+/− on it at any time, which mutates shared cart state directly. Your "
+    "prior tool results (add_to_cart, update_cart_item) are STALE the moment "
+    "they return — by the time the user asks again, the quantities may have "
+    "changed. NEVER answer from conversation memory. ALWAYS call `view_cart` "
+    "first for any question that references cart contents, quantities or "
+    "totals. Same rule before `place_order`.\n"
     "8. PLACE ORDER — 'checkout' / 'place order' / 'confirm order':\n"
     "   → call `place_order(delivery_address?)` → render "
     "`orderConfirmationCard` with the returned data.\n"
@@ -97,7 +106,7 @@ SYSTEM_PROMPT = (
 CSV_PATH = Path(__file__).resolve().parent / "data" / "db.csv"
 
 
-# ── Todo state ────────────────────────────────────────────────────────────────
+# ── Shared agent state (todos + cart) ─────────────────────────────────────────
 
 class Todo(TypedDict):
     id: str
@@ -105,8 +114,28 @@ class Todo(TypedDict):
     completed: bool
 
 
+class CartItem(TypedDict, total=False):
+    id: str
+    name: str
+    restaurant: str
+    price: str
+    quantity: int
+    line_total: str
+
+
+class Cart(TypedDict, total=False):
+    restaurant_id: str | None
+    restaurant: str | None
+    items: list[CartItem]
+    subtotal: str
+    delivery_fee: str
+    total: str
+    item_count: int
+
+
 class AgentState(BaseAgentState):
     todos: list[Todo]
+    cart: Cart
 
 # ── Tools ─────────────────────────────────────────────────────────────────────
 
@@ -302,46 +331,87 @@ def search_menu_items_by_query(
     )
 
 
-@tool
-def add_to_cart(item_id: str, quantity: int = 1) -> dict[str, Any]:
-    """Add an item to the cart. Returns the updated cart snapshot.
+def _cart_command(runtime: ToolRuntime, updated: dict[str, Any]) -> Command:
+    """Push the updated cart into shared state and surface it to the agent."""
+    return Command(update={
+        "cart": updated,
+        "messages": [
+            ToolMessage(
+                content=json.dumps(updated),
+                tool_call_id=runtime.tool_call_id,
+            )
+        ],
+    })
 
-    Adding from a different restaurant than the current cart's resets the cart.
+
+@tool
+def add_to_cart(item_id: str, quantity: int, runtime: ToolRuntime) -> Command:
+    """Add an item to the cart. Switching restaurants resets the cart.
+
+    Cart state lives in shared agent state — the cartSummaryCard component
+    auto-renders from it. After this call, `view_cart` is not needed unless
+    you want to re-show the card.
     """
-    return fd.add_to_cart(item_id=item_id, quantity=quantity)
+    current = runtime.state.get("cart") or fd.empty_cart()
+    return _cart_command(runtime, fd.cart_add(current, item_id, quantity))
 
 
 @tool
-def update_cart_item(item_id: str, quantity: int) -> dict[str, Any]:
+def update_cart_item(item_id: str, quantity: int, runtime: ToolRuntime) -> Command:
     """Set the exact quantity for a cart item. quantity <= 0 removes it."""
-    return fd.update_cart_item(item_id=item_id, quantity=quantity)
+    current = runtime.state.get("cart") or fd.empty_cart()
+    return _cart_command(runtime, fd.cart_update(current, item_id, quantity))
 
 
 @tool
-def remove_cart_item(item_id: str) -> dict[str, Any]:
+def remove_cart_item(item_id: str, runtime: ToolRuntime) -> Command:
     """Remove an item from the cart."""
-    return fd.remove_from_cart(item_id=item_id)
+    current = runtime.state.get("cart") or fd.empty_cart()
+    return _cart_command(runtime, fd.cart_remove(current, item_id))
 
 
 @tool
-def clear_cart() -> dict[str, Any]:
+def clear_cart(runtime: ToolRuntime) -> Command:
     """Empty the cart."""
-    return fd.clear_cart()
+    return _cart_command(runtime, fd.cart_clear())
 
 
 @tool
-def view_cart() -> dict[str, Any]:
-    """Return the current cart snapshot: items, subtotal, delivery_fee, total."""
-    return fd.view_cart()
+def view_cart(runtime: ToolRuntime) -> dict[str, Any]:
+    """Read the current cart from shared state (no mutation).
 
-
-@tool
-def place_order(delivery_address: str | None = None) -> dict[str, Any]:
-    """Place an order from the current cart. Clears the cart on success.
-
-    Returns: order_id, restaurant, items, totals, status ('confirming'), eta.
+    The cartSummaryCard component reads the same state directly, so this is
+    mostly for the agent's own context.
     """
-    return fd.place_order(delivery_address=delivery_address)
+    cart = runtime.state.get("cart") or fd.empty_cart()
+    print(f"[view_cart] state.cart -> item_count={cart.get('item_count')} "
+          f"items={[(i['name'], i['quantity']) for i in cart.get('items', [])]}",
+          flush=True)
+    return cart
+
+
+@tool
+def place_order(
+    runtime: ToolRuntime, delivery_address: str | None = None
+) -> Command:
+    """Place an order from the current cart and clear the cart.
+
+    Returns the order details via the tool message (so the agent can render
+    `orderConfirmationCard`), and clears the cart in shared state.
+    """
+    current = runtime.state.get("cart") or fd.empty_cart()
+    result = fd.place_order(current, delivery_address=delivery_address)
+    update: dict[str, Any] = {
+        "messages": [
+            ToolMessage(
+                content=json.dumps(result),
+                tool_call_id=runtime.tool_call_id,
+            )
+        ],
+    }
+    if "error" not in result:
+        update["cart"] = fd.empty_cart()
+    return Command(update=update)
 
 
 @tool
