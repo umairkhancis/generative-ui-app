@@ -1,7 +1,7 @@
 import { CopilotChat } from "@copilotkit/react-core/v2";
 import { TodoAppLayout } from "@/components/todo-app-layout";
 import { TodoList } from "@/components/todo-list";
-import { useExampleFixedSuggestions, useExampleSuggestions, useTodoSuggestions } from "@/hooks/use-example-suggestions";
+import { useFoodDeliverySuggestions } from "@/hooks/use-example-suggestions";
 import { useAgent, useFrontendTool } from "@copilotkit/react-core/v2";
 import { useState } from "react";
 import { z } from "zod";
@@ -13,9 +13,10 @@ const agentId = (params.get("agent") as string) || "default";
 // Suggestions must be called inside the CopilotChat context, not outside it.
 function ChatWithSuggestions() {
   useControlledComponents();
-  useExampleSuggestions();
-  useExampleFixedSuggestions();
-  useTodoSuggestions();
+  useFoodDeliverySuggestions();
+  // useExampleSuggestions();
+  // useExampleFixedSuggestions();
+  // useTodoSuggestions();
   // useExampleDynamicSuggestions(); // Dynamic Schema: NOT WORKING
   return <CopilotChat agentId={agentId} />;
 }

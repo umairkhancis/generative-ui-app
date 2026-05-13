@@ -26,6 +26,9 @@ from langgraph.types import Command
 from copilotkit import CopilotKitMiddleware, LangGraphAGUIAgent, a2ui
 from ag_ui_langgraph import add_langgraph_fastapi_endpoint
 
+# ── Food-delivery backend ─────────────────────────────────────────────────────
+import food_data as fd
+
 # ── Web framework ─────────────────────────────────────────────────────────────
 from fastapi import FastAPI
 from dotenv import load_dotenv
@@ -48,6 +51,40 @@ SYSTEM_PROMPT = (
     "- For sales/business data requests: first call get_sales_data to fetch "
     "the latest metrics, then call generate_a2ui to visualize the results.\n"
     "- For other rich UI: call generate_a2ui directly.\n\n"
+    "Food-delivery guidance (Talabat-style ordering journey):\n"
+    "Always FETCH from the backend tools first, then RENDER with the matching "
+    "controlled component. Never invent restaurant, menu, cart or order data.\n"
+    "1. RESTAURANT DISCOVERY — show restaurants nearby / by cuisine:\n"
+    "   → call `fetch_nearby_restaurants(cuisine?, limit?)`\n"
+    "   → render `restaurantCarousel({ restaurants: <result> })` "
+    "(or `restaurantCard` if exactly one).\n"
+    "2. RESTAURANT SEARCH — find a specific place by keyword:\n"
+    "   → call `search_restaurants_by_query(query, limit?)`\n"
+    "   → render `restaurantCarousel`.\n"
+    "3. MENU DISCOVERY — show a restaurant's menu:\n"
+    "   → call `fetch_menu_items(restaurant_id, limit?)` using the `id` from a "
+    "prior restaurant result\n"
+    "   → render `menuItemCarousel({ items: <result> })`.\n"
+    "4. ITEM SEARCH — find specific dishes:\n"
+    "   → call `search_menu_items_by_query(query, restaurant_id?, limit?)`\n"
+    "   → render `menuItemCarousel`.\n"
+    "5. ADD TO CART — user says 'add X to cart' / 'order N of Y':\n"
+    "   → call `add_to_cart(item_id, quantity?)` using item ids from prior "
+    "menu results. Then render `cartSummaryCard` with the returned snapshot.\n"
+    "6. EDIT CART — change quantity / remove / clear:\n"
+    "   → call `update_cart_item(item_id, quantity)`, `remove_cart_item`, or "
+    "`clear_cart`. Render `cartSummaryCard`.\n"
+    "7. VIEW CART — 'show my cart' / 'what's in my order':\n"
+    "   → call `view_cart()` → render `cartSummaryCard`.\n"
+    "8. PLACE ORDER — 'checkout' / 'place order' / 'confirm order':\n"
+    "   → call `place_order(delivery_address?)` → render "
+    "`orderConfirmationCard` with the returned data.\n"
+    "9. TRACK ORDER — 'where is my food' / 'track my order':\n"
+    "   → call `get_order_status(order_id?)` → render `orderTrackingCard` "
+    "with the returned data. Status auto-progresses with time.\n"
+    "ID conventions: restaurant ids look like 'r-001', item ids 'r-001-i-007'. "
+    "Pass them back verbatim — do not modify or invent.\n"
+    f"Known cuisines: {', '.join(fd.available_cuisines())}.\n\n"
     "Airline logos: use https://www.gstatic.com/flights/airline_logos/70px/<IATA>.png\n"
     "Common codes: DL=Delta, UA=United, AA=American, WN=Southwest, B6=JetBlue, "
     "NK=Spirit, AS=Alaska, F9=Frontier, BA=British Airways, LH=Lufthansa, "
@@ -57,7 +94,7 @@ SYSTEM_PROMPT = (
     "Just confirm what was rendered."
 )
 
-CSV_PATH = Path(__file__).resolve().parent / "db.csv"
+CSV_PATH = Path(__file__).resolve().parent / "data" / "db.csv"
 
 
 # ── Todo state ────────────────────────────────────────────────────────────────
@@ -215,6 +252,107 @@ def display_flights(flights: list[Flight]) -> str:
     )
 
 
+# ── Food-delivery tools ───────────────────────────────────────────────────────
+
+
+@tool
+def fetch_nearby_restaurants(
+    cuisine: str | None = None, limit: int = 6
+) -> list[dict[str, Any]]:
+    """Restaurant discovery: fetch curated nearby restaurants, top-rated first.
+
+    Args:
+        cuisine: Optional cuisine filter (e.g. "Lebanese", "Italian", "Burgers",
+            "Indian", "Chinese", "Japanese", "Mexican", "Thai",
+            "American Diner", "Healthy"). Case-insensitive. Omit for mixed.
+        limit: Max number of restaurants to return (default 6).
+
+    Each restaurant: id, name, cuisine, rating, delivery_time, delivery_fee, tags.
+    """
+    return fd.list_restaurants(cuisine=cuisine, limit=limit)
+
+
+@tool
+def search_restaurants_by_query(query: str, limit: int = 6) -> list[dict[str, Any]]:
+    """Restaurant search: keyword search on name, cuisine and tags."""
+    return fd.search_restaurants(query=query, limit=limit)
+
+
+@tool
+def fetch_menu_items(restaurant_id: str, limit: int = 8) -> list[dict[str, Any]]:
+    """Menu discovery: fetch a restaurant's menu, popular items first.
+
+    Args:
+        restaurant_id: Restaurant id from a prior restaurant result (e.g. "r-001").
+        limit: Max number of items to return (default 8).
+
+    Each item: id, restaurant_id, restaurant, name, description, price, spicy,
+    vegetarian, popular.
+    """
+    return fd.list_menu_items(restaurant_id=restaurant_id, limit=limit)
+
+
+@tool
+def search_menu_items_by_query(
+    query: str, restaurant_id: str | None = None, limit: int = 8
+) -> list[dict[str, Any]]:
+    """Item search: keyword search across all items or scoped to one restaurant."""
+    return fd.search_menu_items(
+        query=query, restaurant_id=restaurant_id, limit=limit
+    )
+
+
+@tool
+def add_to_cart(item_id: str, quantity: int = 1) -> dict[str, Any]:
+    """Add an item to the cart. Returns the updated cart snapshot.
+
+    Adding from a different restaurant than the current cart's resets the cart.
+    """
+    return fd.add_to_cart(item_id=item_id, quantity=quantity)
+
+
+@tool
+def update_cart_item(item_id: str, quantity: int) -> dict[str, Any]:
+    """Set the exact quantity for a cart item. quantity <= 0 removes it."""
+    return fd.update_cart_item(item_id=item_id, quantity=quantity)
+
+
+@tool
+def remove_cart_item(item_id: str) -> dict[str, Any]:
+    """Remove an item from the cart."""
+    return fd.remove_from_cart(item_id=item_id)
+
+
+@tool
+def clear_cart() -> dict[str, Any]:
+    """Empty the cart."""
+    return fd.clear_cart()
+
+
+@tool
+def view_cart() -> dict[str, Any]:
+    """Return the current cart snapshot: items, subtotal, delivery_fee, total."""
+    return fd.view_cart()
+
+
+@tool
+def place_order(delivery_address: str | None = None) -> dict[str, Any]:
+    """Place an order from the current cart. Clears the cart on success.
+
+    Returns: order_id, restaurant, items, totals, status ('confirming'), eta.
+    """
+    return fd.place_order(delivery_address=delivery_address)
+
+
+@tool
+def get_order_status(order_id: str | None = None) -> dict[str, Any]:
+    """Get current status of an order (defaults to the latest order).
+
+    Status progresses with time: confirming → preparing → delivering → delivered.
+    """
+    return fd.get_order_status(order_id=order_id)
+
+
 # ── Todo tools ────────────────────────────────────────────────────────────────
 
 @tool
@@ -248,7 +386,11 @@ graph = create_agent(
     model=ChatOpenAI(
         model=MODEL, **({"base_url": LITELLM_BASE_URL} if LITELLM_BASE_URL else {})),
     tools=[query_data, get_sales_data, search_flights,
-           display_flights, manage_todos, get_todos],
+           display_flights, manage_todos, get_todos,
+           fetch_nearby_restaurants, search_restaurants_by_query,
+           fetch_menu_items, search_menu_items_by_query,
+           add_to_cart, update_cart_item, remove_cart_item, clear_cart,
+           view_cart, place_order, get_order_status],
     state_schema=AgentState,
     middleware=[CopilotKitMiddleware()],
     checkpointer=MemorySaver(),

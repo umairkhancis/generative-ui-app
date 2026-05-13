@@ -1,0 +1,51 @@
+id,name,cuisine,rating,delivery_time,delivery_fee,tags
+r-001,Operation Falafel,Lebanese,4.6,15-25 min,AED 5,Free delivery
+r-002,Beirut Express,Lebanese,4.1,30-40 min,Free,Top Eats
+r-003,Cedars Kitchen,Lebanese,4.1,30-40 min,AED 5,Top Eats|Free delivery
+r-004,Zaatar w Zeit,Lebanese,4.6,25-35 min,Free,Free delivery
+r-005,Levant House,Lebanese,4.7,20-30 min,AED 5,Top Eats|Free delivery
+r-006,Pasta della Nonna,Italian,4.2,20-30 min,AED 3,Top Eats
+r-007,Trattoria Roma,Italian,4.6,15-25 min,AED 10,
+r-008,Forno Napoli,Italian,4.0,25-35 min,AED 7,Top Eats|Free delivery
+r-009,Olivocarne,Italian,4.7,15-25 min,AED 7,New on Talabat
+r-010,La Piazza,Italian,4.4,15-25 min,AED 3,Halal
+r-011,Charburger Co.,Burgers,4.3,20-30 min,AED 10,New on Talabat
+r-012,Smash & Stack,Burgers,4.2,15-25 min,Free,New on Talabat
+r-013,Patty Lab,Burgers,4.6,30-40 min,AED 5,
+r-014,Brew Burger House,Burgers,4.6,25-35 min,Free,Top Eats|Free delivery
+r-015,The Grindhouse,Burgers,4.6,25-35 min,AED 5,
+r-016,Bombay Brasserie,Indian,4.3,15-25 min,AED 5,Free delivery
+r-017,Tandoor Express,Indian,4.3,15-25 min,AED 5,Top Eats|Free delivery
+r-018,Curry Leaf,Indian,4.4,25-35 min,AED 10,Halal
+r-019,Spice Route,Indian,4.3,30-40 min,AED 3,Free delivery
+r-020,Punjab Grill,Indian,4.9,15-25 min,AED 3,Top Eats
+r-021,Wok This Way,Chinese,4.0,30-40 min,AED 7,Free delivery
+r-022,Golden Dragon,Chinese,4.5,15-25 min,AED 7,Free delivery
+r-023,Lotus Garden,Chinese,4.7,25-35 min,AED 7,Top Eats|Free delivery
+r-024,Dim Sum House,Chinese,4.8,15-25 min,AED 10,Top Eats
+r-025,Szechuan Spice,Chinese,4.7,30-40 min,AED 5,Top Eats
+r-026,Sushi Sora,Japanese,4.8,20-30 min,AED 10,Halal
+r-027,Tonkotsu Bar,Japanese,4.4,15-25 min,AED 10,Free delivery
+r-028,Izakaya 81,Japanese,4.3,15-25 min,AED 7,Top Eats
+r-029,Ramen House,Japanese,4.0,30-40 min,Free,Free delivery
+r-030,Tokyo Bites,Japanese,4.3,20-30 min,AED 3,Halal
+r-031,Taqueria del Sol,Mexican,4.2,15-25 min,AED 7,Top Eats
+r-032,Casa Tequila,Mexican,4.1,30-40 min,AED 3,Top Eats
+r-033,El Mariachi,Mexican,4.8,25-35 min,Free,New on Talabat
+r-034,Burrito Brothers,Mexican,4.3,20-30 min,Free,Top Eats
+r-035,Pueblo Mexicano,Mexican,4.7,25-35 min,AED 7,New on Talabat
+r-036,Bangkok Bowl,Thai,4.6,25-35 min,AED 7,Top Eats|Free delivery
+r-037,Thai Orchid,Thai,4.2,20-30 min,AED 10,Free delivery
+r-038,Soi 38,Thai,4.3,15-25 min,AED 10,Top Eats|Free delivery
+r-039,Lemongrass,Thai,4.8,20-30 min,Free,Top Eats|Free delivery
+r-040,Pad Thai Co.,Thai,4.7,25-35 min,AED 7,New on Talabat
+r-041,Route 66 Diner,American Diner,4.6,20-30 min,Free,Free delivery
+r-042,Stacks & Cakes,American Diner,4.5,25-35 min,AED 5,Halal
+r-043,Big Sky Diner,American Diner,4.7,30-40 min,AED 10,Free delivery
+r-044,Sunny Side Up,American Diner,4.5,20-30 min,AED 10,Top Eats
+r-045,Liberty Grill,American Diner,4.3,30-40 min,AED 5,New on Talabat
+r-046,Green Bowl,Healthy,4.8,15-25 min,AED 7,Top Eats
+r-047,Kale & Co.,Healthy,4.8,20-30 min,AED 3,
+r-048,The Salad Project,Healthy,4.1,20-30 min,Free,Top Eats
+r-049,Wholesome,Healthy,4.8,20-30 min,Free,New on Talabat
+r-050,Roots & Greens,Healthy,4.5,20-30 min,Free,Halal
