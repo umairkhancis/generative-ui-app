@@ -7,8 +7,8 @@ backend lives in `food/`; this module wraps those functions as LangChain
 Key CopilotKit primitives showcased here:
 
   • `AgentState` (BaseAgentState extension) — shared state between the agent
-    and the frontend. Fields are auto-synced both ways. We expose `todos`
-    and `cart` here; the React side reads/writes the same fields via
+    and the frontend. Fields are auto-synced both ways. We expose `cart`
+    here; the React side reads/writes it via
     `useAgent({agentId: "default"}).state.cart` and `.setState(...)`.
 
   • `@tool` (langchain_core.tools) — registers a Python function as an LLM
@@ -37,7 +37,6 @@ import warnings
 warnings.filterwarnings("ignore", message=".*allowed_objects.*")
 
 import json
-import uuid
 from typing import Annotated, Any, TypedDict
 
 from ag_ui_langgraph import add_langgraph_fastapi_endpoint
@@ -68,12 +67,6 @@ MODEL = "gpt-4.1"
 # The frontend reads via `useAgent({agentId: "default"}).state.<field>` and
 # writes via `.setState({<field>: ...})`. Tool-side updates come from
 # `Command(update={<field>: ...})`.
-
-class Todo(TypedDict):
-    id: str
-    title: str
-    completed: bool
-
 
 class CartItem(TypedDict, total=False):
     id: str
@@ -106,7 +99,6 @@ def _last_write_wins(_old: Any, new: Any) -> Any:
 
 
 class AgentState(BaseAgentState):
-    todos: Annotated[list[Todo], _last_write_wins]
     cart: Annotated[Cart, _last_write_wins]
 
 
@@ -243,32 +235,6 @@ def get_order_status(order_id: str | None = None) -> dict[str, Any]:
     return fd.get_order_status(order_id=order_id)
 
 
-# ── Todo tools (kept for the shared-state-from-panel demo) ────────────────────
-
-@tool
-def manage_todos(todos: list[Todo], runtime: ToolRuntime) -> Command:
-    """Replace the entire todo list. Use this to add, edit, or remove todos."""
-    for todo in todos:
-        if not todo.get("id"):
-            todo["id"] = str(uuid.uuid4())
-
-    return Command(update={
-        "todos": todos,
-        "messages": [
-            ToolMessage(
-                content="Successfully updated todos",
-                tool_call_id=runtime.tool_call_id,
-            )
-        ],
-    })
-
-
-@tool
-def get_todos(runtime: ToolRuntime) -> list[Todo]:
-    """Read the current todo list from shared state."""
-    return runtime.state.get("todos", [])
-
-
 # ── System prompt ─────────────────────────────────────────────────────────────
 
 SYSTEM_PROMPT = (
@@ -317,7 +283,16 @@ SYSTEM_PROMPT = (
     f"Known cuisines: {', '.join(fd.available_cuisines())}.\n\n"
 
     "After calling a tool, do NOT repeat or summarise the data in your text "
-    "response. The component renders the result — just confirm what was shown."
+    "response. The component renders the result — just confirm what was "
+    "shown.\n\n"
+
+    "STOP CONDITION — extremely important:\n"
+    "  Once you've satisfied the user's request (fetched data, rendered the "
+    "matching component, OR completed the cart/order action), STOP. Reply "
+    "with at most one short confirming sentence and end your turn. Do NOT "
+    "chain into another tool call 'just in case'. Do NOT re-fetch state you "
+    "just read. Do NOT re-render a card you just rendered. The user can ask "
+    "for the next step themselves."
 )
 
 
@@ -333,14 +308,16 @@ graph = create_agent(
         add_to_cart, update_cart_item, remove_cart_item, clear_cart, view_cart,
         # Orders
         place_order, get_order_status,
-        # Todos (kept for the shared-state side-panel demo)
-        manage_todos, get_todos,
     ],
     state_schema=AgentState,
     middleware=[CopilotKitMiddleware()],
     checkpointer=MemorySaver(),
     system_prompt=SYSTEM_PROMPT,
-)
+# Multi-step journeys (search → fetch menu → render → add → render → checkout
+# → place_order → render) can easily exceed LangGraph's default 25-step
+# ceiling, especially if the agent retries a tool. 60 leaves comfortable
+# headroom; bump higher if you add more tools.
+).with_config({"recursion_limit": 60})
 
 agent = LangGraphAGUIAgent(
     name="food_delivery_agent",
