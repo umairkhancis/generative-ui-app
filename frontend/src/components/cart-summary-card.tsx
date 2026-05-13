@@ -1,6 +1,15 @@
+// CartSummaryCard — controlled GenUI + shared-state canvas.
+//
+// Registered via `useComponent` (the agent renders it inline in chat), AND
+// subscribes to `agent.state.cart` via `useAgent`. The +/− buttons mutate
+// shared state directly through `setState`, so the agent, the inline card,
+// and the side `CartPanel` all read from one source of truth.
+import { parsePrice, setQuantity as setCartQuantity, type Cart, type CartItem } from "@/lib/cart";
 import { useAgent } from "@copilotkit/react-core/v2";
 import { z } from "zod";
 
+// Zod schema kept for the agent's tool-call parameters. The TypeScript type
+// for cart math lives in `@/lib/cart` — both shapes line up.
 const CartItemSchema = z.object({
   id: z.string().describe("Item id, e.g. 'r-001-i-007' — required for +/- to work"),
   name: z.string().describe("Item name"),
@@ -19,77 +28,43 @@ export const CartSummaryCardProps = z.object({
   total: z.string().optional().describe("Grand total"),
 });
 
-type CartItem = z.infer<typeof CartItemSchema>;
 type CartSummaryCardProps = z.infer<typeof CartSummaryCardProps>;
 
 const BRAND = "#EB6030";
 
-function parsePrice(s: string | undefined | null): number {
-  if (!s) return 0;
-  const m = String(s).match(/AED\s*(\d+(?:\.\d+)?)/i);
-  return m ? parseFloat(m[1]) : 0;
-}
-
-function recompute(items: CartItem[], deliveryFee: string | undefined | null) {
-  let subtotal = 0;
-  const updated = items
-    .filter((i) => (i.quantity ?? 0) > 0)
-    .map((i) => {
-      const unit = parsePrice(i.price);
-      const line = unit * (i.quantity ?? 0);
-      subtotal += line;
-      return { ...i, line_total: `AED ${Math.round(line)}` };
-    });
-  const feeVal = parsePrice(deliveryFee);
-  const total = subtotal + feeVal;
-  return {
-    items: updated,
-    subtotal: `AED ${Math.round(subtotal)}`,
-    delivery_fee: deliveryFee || "Free",
-    total: `AED ${Math.round(total)}`,
-    item_count: updated.reduce((s, i) => s + (i.quantity ?? 0), 0),
-  };
-}
-
 export function CartSummaryCard(props: Partial<CartSummaryCardProps>) {
   const { agent } = useAgent({ agentId: "default" });
-  const stateCart = (agent.state as { cart?: Partial<CartSummaryCardProps> } | undefined)?.cart;
+  const stateCart = (agent.state as { cart?: Cart } | undefined)?.cart;
 
   // Prefer shared state — it's the source of truth once mutated by either side.
-  const source: Partial<CartSummaryCardProps> = stateCart ?? props ?? {};
-  const items: CartItem[] = (source.items as CartItem[] | undefined) ?? [];
+  // Fall back to the agent's tool args on the very first paint.
+  const source: Partial<Cart> = stateCart ?? (props as Partial<Cart>);
+  const items: CartItem[] = (source.items ?? []) as CartItem[];
   const restaurant = source.restaurant ?? null;
-  const restaurantId = (source as { restaurant_id?: string }).restaurant_id ?? null;
-  const deliveryFee = source.delivery_fee;
   const subtotal = source.subtotal;
+  const deliveryFee = source.delivery_fee;
   const total = source.total;
 
-  const writeBack = (nextItems: CartItem[]) => {
-    const rc = recompute(nextItems, deliveryFee);
-    agent.setState({
-      cart: {
-        restaurant_id: rc.items.length ? restaurantId : null,
-        restaurant: rc.items.length ? restaurant : null,
-        ...rc,
-      },
-    });
-  };
-
-  const setQuantity = (itemId: string, newQty: number) => {
+  const handleQuantity = (itemId: string, newQty: number) => {
     if (agent.isRunning) return;
-    const next = items.map((i) =>
-      i.id === itemId ? { ...i, quantity: Math.max(0, newQty) } : i,
-    );
-    writeBack(next);
+    // Build a Cart-shaped snapshot for the helper — `source` might just be
+    // tool-call props on the first render before state has caught up.
+    const current: Cart = {
+      restaurant_id: source.restaurant_id ?? null,
+      restaurant,
+      items,
+      subtotal: subtotal ?? "AED 0",
+      delivery_fee: deliveryFee ?? "Free",
+      total: total ?? "AED 0",
+      item_count: items.reduce((s, i) => s + (i.quantity ?? 0), 0),
+    };
+    agent.setState({ cart: setCartQuantity(current, itemId, newQty) });
   };
 
   if (items.length === 0) {
     return (
       <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden max-w-sm">
-        <div
-          className="px-4 py-3 text-white"
-          style={{ backgroundColor: BRAND }}
-        >
+        <div className="px-4 py-3 text-white" style={{ backgroundColor: BRAND }}>
           <div className="text-[11px] uppercase tracking-wider opacity-80">Your cart</div>
           <div className="text-sm font-semibold">Empty</div>
         </div>
@@ -128,7 +103,7 @@ export function CartSummaryCard(props: Partial<CartSummaryCardProps>) {
                 >
                   <button
                     type="button"
-                    onClick={() => setQuantity(item.id, qty - 1)}
+                    onClick={() => handleQuantity(item.id, qty - 1)}
                     disabled={disabled}
                     aria-label={`Decrease ${item.name}`}
                     className="w-6 h-6 rounded-full border border-gray-300 text-gray-700 flex items-center justify-center hover:bg-gray-100 disabled:cursor-not-allowed"
@@ -145,7 +120,7 @@ export function CartSummaryCard(props: Partial<CartSummaryCardProps>) {
                   </span>
                   <button
                     type="button"
-                    onClick={() => setQuantity(item.id, qty + 1)}
+                    onClick={() => handleQuantity(item.id, qty + 1)}
                     disabled={disabled}
                     aria-label={`Increase ${item.name}`}
                     className="w-6 h-6 rounded-full text-white flex items-center justify-center disabled:cursor-not-allowed"

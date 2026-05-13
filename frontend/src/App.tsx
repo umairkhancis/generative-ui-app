@@ -1,60 +1,73 @@
-import { CopilotChat } from "@copilotkit/react-core/v2";
-import { TodoAppLayout } from "@/components/todo-app-layout";
-import { TodoList } from "@/components/todo-list";
+import { AppLayout } from "@/components/app-layout";
+import { CartPanel } from "@/components/cart-panel";
+import { CopilotChat, useAgent, useFrontendTool } from "@copilotkit/react-core/v2";
 import { useFoodDeliverySuggestions } from "@/hooks/use-example-suggestions";
-import { useAgent, useFrontendTool } from "@copilotkit/react-core/v2";
+import { type Cart } from "@/lib/cart";
 import { useState } from "react";
 import { z } from "zod";
 import { useControlledComponents } from "./hooks/use-controlled-components";
 
-const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
-const agentId = (params.get("agent") as string) || "default";
+const AGENT_ID = "default";
 
-// Suggestions must be called inside the CopilotChat context, not outside it.
+// Local view on agent.state — CopilotKit's `state` is untyped at the React
+// boundary; declare what we expect so the rest of the file stays clean.
+type SharedState = { cart?: Cart };
+
+// Suggestions and controlled-component registrations must run inside the
+// CopilotChat context, not outside it — that's the only place CopilotKit's
+// React context is available.
 function ChatWithSuggestions() {
   useControlledComponents();
   useFoodDeliverySuggestions();
-  // useExampleSuggestions();
-  // useExampleFixedSuggestions();
-  // useTodoSuggestions();
-  // useExampleDynamicSuggestions(); // Dynamic Schema: NOT WORKING
-  return <CopilotChat agentId={agentId} />;
+  return <CopilotChat agentId={AGENT_ID} />;
 }
 
 export default function App() {
-  const [todosOpen, setTodosOpen] = useState(false);
+  const [cartOpen, setCartOpen] = useState(false);
 
-  // 🪁 Register a frontend tool the agent can call to control the UI
+  // 🪁 Frontend tool — lets the agent open/close the cart panel from chat.
   useFrontendTool({
-    name: "openOrCloseTodos",
-    description: "Open or close the todo panel.",
+    name: "openOrCloseCart",
+    description: "Open or close the cart side panel.",
     parameters: z.object({ open: z.boolean() }),
     handler: async ({ open }) => {
-      setTodosOpen(open);
-      return `Todos are ${open ? 'open' : 'closed'}.`;
+      setCartOpen(open);
+      return `Cart panel is ${open ? "open" : "closed"}.`;
     },
   });
 
-  // 🪁 Subscribe to shared agent state
-  const { agent } = useAgent({ agentId: "default" });
+  // 🪁 Subscribe to shared agent state. The panel reads `state.cart` and
+  // writes back via `setState` — same state the cartSummaryCard (controlled
+  // GenUI) and the backend `Command(update={cart: ...})` use.
+  const { agent } = useAgent({ agentId: AGENT_ID });
+  const cart = (agent.state as SharedState | undefined)?.cart;
+
+  const requestCheckout = async () => {
+    if (agent.isRunning) return;
+    agent.addMessage({
+      id: crypto.randomUUID(),
+      role: "user",
+      content:
+        "Please show me the final order summary so I can review and place the order.",
+    });
+    await agent.runAgent();
+  };
 
   return (
-    <TodoAppLayout
+    <AppLayout
       chat={<ChatWithSuggestions />}
-      open={todosOpen}
-      onOpenChange={setTodosOpen}
+      open={cartOpen}
+      onOpenChange={setCartOpen}
+      panelTitle="Cart"
       panel={(onClose) => (
-        <TodoList
-          // 🪁 Read shared state
-          todos={agent.state.todos || []}
-
-          // 🪁 Write shared state
-          onUpdate={(updated) => agent.setState({ todos: updated })}
-
+        <CartPanel
+          cart={cart}
+          onUpdate={(updated) => agent.setState({ cart: updated })}
+          onCheckout={requestCheckout}
           isRunning={agent.isRunning}
           onClose={onClose}
         />
       )}
     />
   );
-};
+}
